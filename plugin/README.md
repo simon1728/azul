@@ -2,7 +2,7 @@
 
 ## Installation
 
-### Method 1: Auto-Install (Recommended)
+### Method 1: Automatic via Roblox Marketplace (Recommended)
 
 1. Install the plugin automatically using the Roblox Plugin Marketplace: https://create.roblox.com/store/asset/79510309341601/Azul-Companion-Plugin
 
@@ -12,9 +12,18 @@
 
 1. Download the source code from the [Azul Companion Plugin](https://www.roblox.com/games/132762411481199/Azul-Companion-Plugin) place: (3 dots (⋯) > "Download")
 2. Open the downloaded `.rbxlx` or `.rbxl` file in Roblox Studio
-3. Right-click the `AzulPlugin` folder in `ServerStorage` and select **"Save as Local Plugin"**
+3. Right-click the `AzulCompanionPlugin` folder in `ReplicatedFirst` and select **"Save as Local Plugin"**
 4. Restart Roblox Studio
 5. The Azul icon should now appear in the toolbar
+
+### Method 3: Build via Azul
+
+In case you wish to help maintain the plugin or want to customize it, you can build the Plugin project yourself using Azul:
+
+```ps1
+cd plugin
+azul build --from-sourcemap .\sourcemap.json
+```
 
 ## Troubleshooting
 
@@ -43,9 +52,3 @@ Roblox is very particular about how plugins are installed. Sometimes, just "gett
 - Click "Toggle Sync" to reconnect
 - Check the Output window for error messages
 - Restart both the daemon and Studio
-
-### Clearing Legacy GUIDs
-
-Ever since Azul 1.0.5, the plugin uses a new method to identify Instances. It is highly advised to clear any legacy GUIDs to avoid conflicts since they are no longer needed and consume unnecessary resources.
-
-You can do so by clicking the "Clear Legacy GUIDs" button in the plugin settings. This will remove all old GUIDs stored in your Explorer.

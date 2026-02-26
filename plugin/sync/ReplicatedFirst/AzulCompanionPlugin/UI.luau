@@ -129,16 +129,13 @@ function UI.new(plugin, callbacks, settingsScope, helpers): SelfType
 	self.isSyncEnabled = false
 
 	-- Import UI components
-	local parentFolder = script.Parent
-	local studioWidgets = parentFolder:FindFirstChild("StudioWidgets")
-	local components = studioWidgets:FindFirstChild("Components")
-	local VerticalScrollingFrame = require(components:FindFirstChild("VerticalScrollingFrame"))
-	local CollapsibleTitledSection = require(components:FindFirstChild("CollapsibleTitledSection"))
-	local CustomTextButton = require(components:FindFirstChild("CustomTextButton"))
-	local LabeledCheckbox = require(components:FindFirstChild("LabeledCheckbox"))
-	local LabeledMultiChoice = require(components:FindFirstChild("LabeledMultiChoice"))
-	local LabeledTextInput = require(components:FindFirstChild("LabeledTextInput"))
-	local DropdownMenu = require(components:FindFirstChild("DropdownMenu"))
+	local VerticalScrollingFrame = require("./StudioWidgets/Components/VerticalScrollingFrame")
+	local CollapsibleTitledSection = require("./StudioWidgets/Components/CollapsibleTitledSection")
+	local CustomTextButton = require("./StudioWidgets/Components/CustomTextButton")
+	local LabeledCheckbox = require("./StudioWidgets/Components/LabeledCheckbox")
+	local LabeledMultiChoice = require("./StudioWidgets/Components/LabeledMultiChoice")
+	local LabeledTextInput = require("./StudioWidgets/Components/LabeledTextInput")
+	local DropdownMenu = require("./StudioWidgets/Components/DropdownMenu")
 
 	-- Create toolbar button
 	local toolbar = plugin:CreateToolbar("Azul")
@@ -163,23 +160,55 @@ function UI.new(plugin, callbacks, settingsScope, helpers): SelfType
 	mainSectionListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
 	-- Main section
-	local mainSection = CollapsibleTitledSection.new("mainSection", "Azul Companion Plugin", true, false, false)
+	local mainSection = CollapsibleTitledSection.new("mainSection", "Azul Companion Plugin", true, false, false, false)
 	mainSection:GetSectionFrame().LayoutOrder = 0
 	mainSection:GetSectionFrame().Parent = mainScrollFrame:GetContentsFrame()
 
 	-- Title image
+	local imageContainer = Instance.new("Frame")
+	imageContainer.Size = UDim2.new(1, 0, 0, 70)
+	imageContainer.BackgroundTransparency = 1
+
+	local imageContainerListLayout = Instance.new("UIListLayout")
+	imageContainerListLayout.FillDirection = Enum.FillDirection.Horizontal
+	imageContainerListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	imageContainerListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	imageContainerListLayout.Parent = imageContainer
+
 	local titleImageLabel = Instance.new("ImageLabel")
-	titleImageLabel.Size = UDim2.new(1, 0, 0, 50)
+	titleImageLabel.Size = UDim2.fromScale(0.2, 1)
+	titleImageLabel.AutomaticSize = Enum.AutomaticSize.X
 	titleImageLabel.BackgroundTransparency = 1
 	titleImageLabel.Image = self.LOGO
 	titleImageLabel.ScaleType = Enum.ScaleType.Fit
-	mainSection:AddChild(titleImageLabel, 0)
+	titleImageLabel.LayoutOrder = 0
+	titleImageLabel.Parent = imageContainer
+
+	local azulText = Instance.new("TextLabel")
+	azulText.Text = "<b>Azul</b>"
+	azulText.RichText = true
+	azulText.Font = Enum.Font.RobotoMono
+	azulText.TextSize = 36
+	azulText.TextScaled = true
+	azulText.Size = UDim2.fromScale(0.1, 1)
+	azulText.AutomaticSize = Enum.AutomaticSize.X
+	azulText.TextColor3 = Color3.fromRGB(255, 255, 255)
+	azulText.BackgroundTransparency = 1
+	azulText.LayoutOrder = 1
+	azulText.Parent = imageContainer
+
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0, 10)
+	padding.PaddingBottom = UDim.new(0, 10)
+	padding.Parent = imageContainer
+
+	mainSection:AddChild(imageContainer, 0)
 	self.titleImageLabel = titleImageLabel
 
 	-- Sync button
 	local syncButton = CustomTextButton.new("toggleSync", "Connect", false)
 	syncButton.Parent = mainScrollFrame:GetContentsFrame()
-	syncButton:SetSize(UDim2.fromScale(1, 0.25))
+	syncButton:SetSize(UDim2.fromScale(1, 0.2))
 
 	local syncButtonPadding = Instance.new("UIPadding")
 	syncButtonPadding.PaddingLeft = UDim.new(0.1, 0)
@@ -198,17 +227,6 @@ function UI.new(plugin, callbacks, settingsScope, helpers): SelfType
 	mainSection:AddChild(syncButton:GetFrame())
 	self.syncButton = syncButton
 
-	-- Debug Mode checkbox
-	local debugModeCheckbox = LabeledCheckbox.new("debugMode", "Debug Mode", Config.DEBUG_MODE, false)
-	debugModeCheckbox:SetValue(Config.DEBUG_MODE)
-	debugModeCheckbox:SetValueChangedFunction(function(newValue)
-		Config.DEBUG_MODE = newValue
-		helpers.debugPrint(`[🐛 AzulUI]: Debug mode set to: {newValue}`)
-	end)
-	mainSection:AddChild(debugModeCheckbox:GetFrame())
-	mainSection:AddChild(createInfoLabel("Debug mode enables verbose logging to the output console."))
-	self.debugModeCheckbox = debugModeCheckbox
-
 	-- Silent Mode checkbox
 	local silentModeCheckbox = LabeledCheckbox.new("silentMode", "Silent Mode", Config.SILENT_MODE, false)
 	silentModeCheckbox:SetValue(Config.SILENT_MODE)
@@ -219,6 +237,17 @@ function UI.new(plugin, callbacks, settingsScope, helpers): SelfType
 	mainSection:AddChild(silentModeCheckbox:GetFrame())
 	mainSection:AddChild(createInfoLabel("Silent mode suppresses all console output except errors."))
 	self.silentModeCheckbox = silentModeCheckbox
+
+	-- Debug Mode checkbox
+	local debugModeCheckbox = LabeledCheckbox.new("debugMode", "Debug Mode", Config.DEBUG_MODE, false)
+	debugModeCheckbox:SetValue(Config.DEBUG_MODE)
+	debugModeCheckbox:SetValueChangedFunction(function(newValue)
+		Config.DEBUG_MODE = newValue
+		helpers.debugPrint(`[🐛 AzulUI]: Debug mode set to: {newValue}`)
+	end)
+	mainSection:AddChild(debugModeCheckbox:GetFrame())
+	mainSection:AddChild(createInfoLabel("Debug mode enables verbose logging to the output console."))
+	self.debugModeCheckbox = debugModeCheckbox
 
 	-- Settings section
 	local settingsSection = CollapsibleTitledSection.new("settings", "Plugin Settings", true, true, true)
@@ -332,32 +361,12 @@ function UI.new(plugin, callbacks, settingsScope, helpers): SelfType
 		self.callbacks.onSettingsScopeChanged(newScope)
 	end)
 
-	-- Clear legacy GUIDs button
-	-- local clearGuidsButton = CustomTextButton.new("clearLegacyGUIDs", "Clear Legacy GUIDs", false)
-	-- clearGuidsButton:SetClickedFunction(function()
-	-- 	self.callbacks.onClearGuids()
-	-- end)
-	-- clearGuidsButton:SetSize(UDim2.fromScale(1, 0.1))
-
-	-- local clearButtonPadding = Instance.new("UIPadding")
-	-- clearButtonPadding.PaddingLeft = UDim.new(0.1, 0)
-	-- clearButtonPadding.PaddingRight = UDim.new(0.1, 0)
-	-- clearButtonPadding.Parent = clearGuidsButton:GetFrame()
-
-	-- settingsSection:AddChild(clearGuidsButton:GetFrame())
-	-- settingsSection:AddChild(
-	-- 	createInfoLabel(
-	-- 		"Removes all stored GUID attributes from instances in the DataModel. Use this to clean GUIDs left by old versions of Azul."
-	-- 	)
-	-- )
-	-- self.clearGuidsButton = clearGuidsButton
-
-	-- Clear legacy GUIDs button
+	-- Reload sourcemap button
 	local reloadSourcemapButton = CustomTextButton.new("reloadSourcemap", "Reload Sourcemap", false)
 	reloadSourcemapButton:SetClickedFunction(function()
 		self.callbacks.onSourcemapReload()
 	end)
-	reloadSourcemapButton:SetSize(UDim2.fromScale(1, 0.1))
+	reloadSourcemapButton:SetSize(UDim2.fromScale(1, 0.07))
 
 	local clearButtonPadding = Instance.new("UIPadding")
 	clearButtonPadding.PaddingLeft = UDim.new(0.1, 0)
@@ -365,7 +374,9 @@ function UI.new(plugin, callbacks, settingsScope, helpers): SelfType
 	clearButtonPadding.Parent = reloadSourcemapButton:GetFrame()
 
 	settingsSection:AddChild(reloadSourcemapButton:GetFrame())
-	settingsSection:AddChild(createInfoLabel("Allows you to reload the sourcemap without restarting Azul."))
+	settingsSection:AddChild(
+		createInfoLabel("Something's not right? Force reload the sourcemap to reset the sync state.")
+	)
 	self.reloadSourcemapButton = reloadSourcemapButton
 
 	-- Connect button click handler

@@ -804,7 +804,7 @@ function AzulService.instanceToDataDedup(
 end
 
 --- Apply snapshot instances to the workspace
-function AzulService.applySnapshotInstances(instances: { any }): number
+function AzulService.applySnapshotInstances(instances: { any }): (number, number)
 	table.sort(instances, function(a, b)
 		return #a.path < #b.path
 	end)
@@ -818,6 +818,8 @@ function AzulService.applySnapshotInstances(instances: { any }): number
 	}
 
 	local created = 0
+	local updated = 0
+
 	for _, item in ipairs(instances) do
 		local adjustedPath = {}
 		for i, segment in ipairs(item.path) do
@@ -926,10 +928,11 @@ function AzulService.applySnapshotInstances(instances: { any }): number
 
 		if isScriptClass(item.className) and item.source and instance then
 			AzulService.setScriptSource(instance :: Script, item.source)
+			updated += 1
 		end
 	end
 
-	return created
+	return created, updated
 end
 
 --- Find the push config ModuleScript

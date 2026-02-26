@@ -34,6 +34,7 @@ local PUSH_CONFIG_PATH = {
 
 local SETTINGS_SCOPE = Enums.scope.GLOBAL -- or "project"
 local SETTINGS_KEY = "AZUL_SETTINGS"
+local SETTINGS_SCOPE_KEY = "AZUL_SETTINGS_SCOPE_BY_PLACE"
 
 -- Logging helpers
 local function debugPrint(...)
@@ -50,6 +51,26 @@ local function getScopeKey(scope)
 	local placeId = tostring(game.PlaceId or "0")
 	if scope == Enums.scope.PROJECT then return `project_{placeId}` end
 	return "global"
+end
+
+local function getPlaceScopeSelectionKey()
+	return tostring(game.PlaceId or "0")
+end
+
+local function saveSelectedScope()
+	local selectedScopes = plugin:GetSetting(SETTINGS_SCOPE_KEY)
+	if type(selectedScopes) ~= "table" then selectedScopes = {} end
+
+	selectedScopes[getPlaceScopeSelectionKey()] = SETTINGS_SCOPE
+	plugin:SetSetting(SETTINGS_SCOPE_KEY, selectedScopes)
+end
+
+local function loadSelectedScope()
+	local selectedScopes = plugin:GetSetting(SETTINGS_SCOPE_KEY)
+	if type(selectedScopes) ~= "table" then return end
+
+	local scope = selectedScopes[getPlaceScopeSelectionKey()]
+	if scope == Enums.scope.GLOBAL or scope == Enums.scope.PROJECT then SETTINGS_SCOPE = scope end
 end
 
 local _storedSettings = {}
@@ -109,6 +130,7 @@ local function loadSettings()
 	if globalScoped.SILENT_MODE ~= nil then CONFIG.SILENT_MODE = globalScoped.SILENT_MODE end
 end
 
+loadSelectedScope()
 loadSettings()
 
 -- Sync state
@@ -286,6 +308,15 @@ local function sendFullSnapshot(options: { includeProperties: boolean, scriptsAn
 	infoPrint("Snapshot sent:", #instances, "instances (", scriptCount, "scripts )")
 
 	if syncEnabled then
+		if includeProperties or scriptsAndDescendantsOnly then
+			debugPrint(
+				`Snapshot sent with options (includeProperties={tostring(includeProperties)}, scriptsAndDescendantsOnly={tostring(
+					scriptsAndDescendantsOnly
+				)}) - stopping sync since "pack" is one-shot.`
+			)
+			stopSync()
+		end
+
 		batchingEnabled = true
 		batchFlushToken += 1 -- Invalidate any pre-snapshot timers
 		batchAccumulator = 0
@@ -600,8 +631,9 @@ local function processMessage(message)
 		-- One-time push from filesystem into Studio
 		infoPrint("Applying build snapshot from daemon")
 		setOutboundSuppressed(true)
+
 		local ok, err = pcall(function()
-			local created = AzulService.applySnapshotInstances(message.data)
+			local created, updated = AzulService.applySnapshotInstances(message.data)
 			-- Update tracking with new instances
 			for _, item in ipairs(message.data or {}) do
 				local instance = guidMap[item.guid]
@@ -610,7 +642,7 @@ local function processMessage(message)
 					attachListeners(instance)
 				end
 			end
-			infoPrint(`Build snapshot applied ({created} created/updated)`)
+			infoPrint(`Build snapshot applied ({created} created, {updated} updated)`)
 		end)
 
 		setOutboundSuppressed(false)
@@ -818,6 +850,7 @@ end
 -- Cleanup on plugin unload
 plugin.Unloading:Connect(function()
 	saveSettings()
+	saveSelectedScope()
 	stopSync()
 end)
 
@@ -839,6 +872,7 @@ local uiCallbacks: UI.CallbackFunctions = {
 		-- Persist the current scope before switching
 		saveSettings()
 		SETTINGS_SCOPE = newScope
+		saveSelectedScope()
 		azulUI:SetSettingsScope(SETTINGS_SCOPE)
 		loadSettings()
 		AzulService.rebuildServiceSet(serviceSet)
