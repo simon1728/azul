@@ -23,7 +23,14 @@
                   "guid": "11066",
                   "filePaths": [
                     "sync/ReplicatedFirst/AzulCompanionPlugin/Actor/AzulSync.server.luau"
-                  ]
+                  ],
+                  "properties": {
+                    "RunContext": {
+                      "__type": "EnumItem",
+                      "enumType": "RunContext",
+                      "name": "Plugin"
+                    }
+                  }
                 }
               ]
             },
@@ -243,7 +250,15 @@
             }
           ]
         }
-      ]
+      ],
+      "properties": {
+        "Archivable": true
+      }
     }
-  ]
+  ],
+  "_azul": {
+    "packVersion": 1,
+    "packedAt": "2026-02-26T23:51:44.029Z",
+    "mode": "all"
+  }
 }
