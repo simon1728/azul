@@ -21,14 +21,11 @@ Azul also allows pushing local files into Studio using the `azul build` command,
 - - [x] 🔄 **Bi-directional sync**: Changes in Studio update files, and file edits update Studio
 - - [x] 🏗️ **[Build command](https://github.com/Ransomwave/azul/wiki/Getting-started#building-from-an-existing-project)**: `azul build` one-time pushes your local files into Studio (creates or overwrites, never deletes)
 - - [x] 📦 **[Push command](https://github.com/Ransomwave/azul/wiki/Commands#azul-push)**: `azul push` selectively pushes local files. Useful when importing external libraries or using package managers (i.e Wally)
+- - [x] 🏛️ **Fully hermetic builds**: Use `azul pack` to fully serialize Instance properties, allowing for 1:1 reproductible builds when `build`ing or `push`ing.
 - - [x] 🔴 **Rojo compatibility mode**: Supports importing from Rojo projects with the `--rojo` flag.
 - - [x] 🌳 **DataModel mirroring**: Instance hierarchy 1:1 mapped to folder structure
 - - [x] 🎯 **No manual config / required structure**: Works out of the box with new and existing Roblox Studio projects, regardless of structure.
 - - [x] 🗺️ **Automatic sourcemap generation**: Generates a Rojo-compatible `sourcemap.json` so tools like Luau-lsp work out of the box.
-
-### Upcoming Features
-
-- [ ] 🏛️ **Fully hermetic builds**: Make Azul fully serialize `Instance` properties, allowing for fully reproducible 1:1 builds.
 
 ## Why Azul?
 
@@ -66,7 +63,7 @@ Azul offers several advantages over the upcoming Script Sync feature:
 1. Install Node.js from [nodejs.org](https://nodejs.org/).
 2. Run the following command in your terminal:
    ```ps1
-   npm install -g azul
+   npm install azul-sync -g
    ```
 3. Install the Azul Companion Plugin to Roblox Studio.
    - **Guide: [Azul Plugin: Install Instructions](/plugin/README.md)**
