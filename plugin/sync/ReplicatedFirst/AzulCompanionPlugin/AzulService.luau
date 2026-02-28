@@ -196,7 +196,19 @@ function AzulService.instanceToData(
 	if isScript(instance) then data.source = (instance :: Script).Source end
 
 	if options and options.includeProperties then
-		local properties = Serializer.collectSerializedProperties(instance)
+		local properties = Serializer.collectSerializedProperties(instance, {
+			getInstanceRefData = function(referenceInstance: Instance)
+				local referencePath = AzulService.getInstancePath(referenceInstance)
+				if not referencePath then return nil end
+
+				local referenceGuid =
+					AzulService.getOrCreateGUID(referenceInstance, trackedInstances, guidMap, usedGuids)
+				return {
+					guid = referenceGuid,
+					path = referencePath,
+				}
+			end,
+		})
 		if next(properties) ~= nil then data.properties = properties end
 
 		local attributes = instance:GetAttributes()
@@ -257,13 +269,28 @@ function AzulService.instanceToDataDedup(
 	return data
 end
 
+type InstanceData = {
+	guid: string,
+	className: string,
+	name: string,
+	path: { string }, -- ["ReplicatedStorage", "Modules", "Foo"]
+	parentGuid: string?, -- parent instance GUID
+	source: string?, -- Only present for Script/LocalScript/ModuleScript
+	properties: { [string]: any }?, -- Record<string, unknown>;
+	attributes: { [string]: any }?, -- Record<string, unknown>;
+	tags: { string }?,
+}
+
 --- Apply snapshot instances to the workspace
-function AzulService.applySnapshotInstances(instances: { any }): (number, number)
+function AzulService.applySnapshotInstances(instances: { InstanceData }): (number, number, { [string]: Instance })
 	table.sort(instances, function(a, b)
 		return #a.path < #b.path
 	end)
 
 	local siblingOrdinalByPathClass: { [string]: number } = {}
+	local existingInstancesByGuid: { [string]: Instance } = {}
+	local resolvedInstancesByGuid: { [string]: Instance } = {}
+	local deferredPropertyApplications: { { instance: Instance, properties: { [string]: any }? } } = {}
 
 	local lockedContainerParents = {
 		StarterPlayerScripts = "StarterPlayer",
@@ -273,8 +300,35 @@ function AzulService.applySnapshotInstances(instances: { any }): (number, number
 
 	local created = 0
 	local updated = 0
+	local guidMatchCount = 0
+	local fallbackMatchCount = 0
 
-	for _, item in ipairs(instances) do
+	for _, existing in ipairs(game:GetDescendants()) do
+		local guid = existing:GetDebugId(0)
+		if type(guid) == "string" and guid ~= "" then existingInstancesByGuid[guid] = existing end
+	end
+
+	local function findInstanceByPath(pathSegments: { string }): Instance?
+		local current: Instance = game
+		for index, segment in ipairs(pathSegments) do
+			local nextNode: Instance? = nil
+
+			if index == 1 then
+				local okService, service = pcall(function()
+					return game:GetService(segment)
+				end)
+				if okService and service then nextNode = service end
+			end
+
+			if not nextNode then nextNode = current:FindFirstChild(segment) end
+			if not nextNode then return nil end
+			current = nextNode
+		end
+
+		return current
+	end
+
+	for _, item in instances do
 		local adjustedPath = {}
 		for i, segment in ipairs(item.path) do
 			adjustedPath[i] = segment
@@ -306,8 +360,25 @@ function AzulService.applySnapshotInstances(instances: { any }): (number, number
 			parentPath[i] = adjustedPath[i]
 		end
 
-		local parent = AzulService.getOrCreatePath(parentPath)
-		local existing: Instance? = serviceCandidate
+		local parent: Instance? = nil
+		if type(item.parentGuid) == "string" and item.parentGuid ~= "" and item.parentGuid ~= "root" then
+			parent = resolvedInstancesByGuid[item.parentGuid] or existingInstancesByGuid[item.parentGuid]
+		end
+		if not parent then parent = AzulService.getOrCreatePath(parentPath) end
+		local existing: Instance? = nil
+		if type(item.guid) == "string" and item.guid ~= "" then
+			existing = existingInstancesByGuid[item.guid]
+			if existing then
+				guidMatchCount += 1
+			end
+		end
+
+		if not existing then
+			existing = serviceCandidate
+			if existing then
+				fallbackMatchCount += 1
+			end
+		end
 		if not existing then
 			local targetName = adjustedPath[#adjustedPath]
 			local targetClassName = item.className
@@ -316,11 +387,14 @@ function AzulService.applySnapshotInstances(instances: { any }): (number, number
 			siblingOrdinalByPathClass[occurrenceKey] = occurrenceOrdinal
 
 			local sameNameChildren = {}
-			for _, child in ipairs(parent:GetChildren()) do
+			for _, child in ipairs((parent :: Instance):GetChildren()) do
 				if child.Name == targetName then table.insert(sameNameChildren, child) end
 			end
 
 			existing = sameNameChildren[occurrenceOrdinal]
+			if existing then
+				fallbackMatchCount += 1
+			end
 		end
 		local instance = existing
 
@@ -364,19 +438,38 @@ function AzulService.applySnapshotInstances(instances: { any }): (number, number
 				newInstance = createdInstance
 			else
 				newInstance = Instance.new("Folder")
+				debugPrint(`Failed to create instance of class "{item.className}", created Folder placeholder instead.`)
 			end
 			newInstance.Name = adjustedPath[#adjustedPath]
-			newInstance.Parent = parent
+			newInstance.Parent = parent :: Instance
 			instance = newInstance
 			created += 1
 		else
+			if parent and instance.Parent ~= parent and not AzulService.isProtectedRobloxContainer(instance) then
+				local okReparent = pcall(function()
+					instance.Parent = parent :: Instance
+				end)
+				if not okReparent then
+					debugPrint(`Failed to reparent instance "{instance.Name}" ({instance.ClassName}) to target parent.`)
+				end
+			end
+
 			if not serviceCandidate and not AzulService.isProtectedRobloxContainer(instance) then
 				instance.Name = adjustedPath[#adjustedPath]
 			end
 		end
 
 		if instance then
-			Serializer.applySerializedProperties(instance, item.properties)
+			if type(item.guid) == "string" and item.guid ~= "" then
+				existingInstancesByGuid[item.guid] = instance
+				resolvedInstancesByGuid[item.guid] = instance
+			end
+
+			table.insert(deferredPropertyApplications, {
+				instance = instance,
+				properties = item.properties,
+			})
+
 			Serializer.applySerializedAttributes(instance, item.attributes)
 			Serializer.applySerializedTags(instance, item.tags)
 		end
@@ -387,7 +480,22 @@ function AzulService.applySnapshotInstances(instances: { any }): (number, number
 		end
 	end
 
-	return created, updated
+	for _, pending in ipairs(deferredPropertyApplications) do
+		Serializer.applySerializedProperties(pending.instance, pending.properties, {
+			resolveInstanceByGuid = function(guid: string): Instance?
+				return resolvedInstancesByGuid[guid]
+			end,
+			resolveInstanceByPath = function(pathSegments: { string }): Instance?
+				return findInstanceByPath(pathSegments)
+			end,
+		})
+	end
+
+	debugPrint(
+		`Snapshot resolve summary: {guidMatchCount} guid matches, {fallbackMatchCount} fallback matches, {created} created, {updated} scripts updated`
+	)
+
+	return created, updated, resolvedInstancesByGuid
 end
 
 --- Find the push config ModuleScript

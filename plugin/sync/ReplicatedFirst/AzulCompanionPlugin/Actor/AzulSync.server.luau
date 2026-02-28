@@ -633,14 +633,12 @@ local function processMessage(message)
 		setOutboundSuppressed(true)
 
 		local ok, err = pcall(function()
-			local created, updated = AzulService.applySnapshotInstances(message.data)
+			local created, updated, appliedGuidMap = AzulService.applySnapshotInstances(message.data)
 			-- Update tracking with new instances
-			for _, item in ipairs(message.data or {}) do
-				local instance = guidMap[item.guid]
-				if instance then
-					trackedInstances[instance] = item.guid
-					attachListeners(instance)
-				end
+			for guid, instance in pairs(appliedGuidMap) do
+				guidMap[guid] = instance
+				trackedInstances[instance] = guid
+				attachListeners(instance)
 			end
 			infoPrint(`Build snapshot applied ({created} created, {updated} updated)`)
 		end)
@@ -667,16 +665,14 @@ local function processMessage(message)
 				local targetContainer = AzulService.getOrCreatePath(destination)
 				if mapping.destructive then wipeChildren(targetContainer) end
 
-				local created = AzulService.applySnapshotInstances(mapping.instances or {})
+				local created, updated, appliedGuidMap = AzulService.applySnapshotInstances(mapping.instances or {})
 				-- Update tracking with new instances
-				for _, item in ipairs(mapping.instances or {}) do
-					local instance = guidMap[item.guid]
-					if instance then
-						trackedInstances[instance] = item.guid
-						attachListeners(instance)
-					end
+				for guid, instance in pairs(appliedGuidMap) do
+					guidMap[guid] = instance
+					trackedInstances[instance] = guid
+					attachListeners(instance)
 				end
-				infoPrint(`Push applied to {table.concat(destination, "/")} ({created} created/updated)`)
+				infoPrint(`Push applied to {table.concat(destination, "/")} ({created} created, {updated} updated)`)
 			end
 		end)
 

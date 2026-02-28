@@ -141,7 +141,43 @@ local function parseCFrameFromValue(recordValue: any): CFrame?
 	return nil
 end
 
-function Serializer.serializeValue(value: any): any
+local function getInstancePathSegments(instance: Instance): { string }?
+	local path = {}
+	local current: Instance? = instance
+
+	while current and current ~= game do
+		table.insert(path, 1, current.Name)
+		current = current.Parent
+	end
+
+	if current ~= game then return nil end
+	return path
+end
+
+local function findInstanceByPath(pathSegments: { string }): Instance?
+	local current: Instance = game
+	for index, segment in ipairs(pathSegments) do
+		local nextNode: Instance? = nil
+
+		if index == 1 then
+			local ok, service = pcall(function()
+				return game:GetService(segment)
+			end)
+			if ok and service then nextNode = service end
+		end
+
+		if not nextNode then nextNode = current:FindFirstChild(segment) end
+		if not nextNode then return nil end
+		current = nextNode
+	end
+
+	return current
+end
+
+function Serializer.serializeValue(
+	value: any,
+	options: { getInstanceRefData: ((Instance) -> { guid: string?, path: { string }? }?)? }?
+): any
 	local kind = typeof(value)
 
 	if kind == "nil" then return nil end
@@ -242,7 +278,7 @@ function Serializer.serializeValue(value: any): any
 		for _, keypoint in ipairs(sequence.Keypoints) do
 			table.insert(keypoints, {
 				time = keypoint.Time,
-				color = Serializer.serializeValue(keypoint.Value),
+				color = Serializer.serializeValue(keypoint.Value, options),
 			})
 		end
 		return { __type = "ColorSequence", keypoints = keypoints }
@@ -292,8 +328,39 @@ function Serializer.serializeValue(value: any): any
 		local ray = value :: Ray
 		return {
 			__type = "Ray",
-			origin = Serializer.serializeValue(ray.Origin),
-			direction = Serializer.serializeValue(ray.Direction),
+			origin = Serializer.serializeValue(ray.Origin, options),
+			direction = Serializer.serializeValue(ray.Direction, options),
+		}
+	end
+
+	if kind == "Instance" then
+		local instanceValue = value :: Instance
+		local guid: string? = nil
+		local path: { string }? = nil
+
+		if options and options.getInstanceRefData then
+			local ok, refData = pcall(function()
+				return options.getInstanceRefData(instanceValue)
+			end)
+			if ok and type(refData) == "table" then
+				if type(refData.guid) == "string" then guid = refData.guid end
+				if type(refData.path) == "table" then path = refData.path end
+			end
+		end
+
+		if not guid then
+			local okGuid, debugId = pcall(function()
+				return instanceValue:GetDebugId(0)
+			end)
+			if okGuid and type(debugId) == "string" and debugId ~= "" then guid = debugId end
+		end
+
+		if not path then path = getInstancePathSegments(instanceValue) end
+
+		return {
+			__type = "InstanceRef",
+			guid = guid,
+			path = path,
 		}
 	end
 
@@ -319,7 +386,13 @@ function Serializer.serializeValue(value: any): any
 	return nil
 end
 
-function Serializer.deserializeValue(value: any): any
+function Serializer.deserializeValue(
+	value: any,
+	options: {
+		resolveInstanceByGuid: ((string) -> Instance?)?,
+		resolveInstanceByPath: (({ string }) -> Instance?)?,
+	}?
+): any
 	if type(value) ~= "table" then return value end
 
 	local record = value :: { [string]: any }
@@ -330,6 +403,15 @@ function Serializer.deserializeValue(value: any): any
 		if type(record.type) ~= "string" then return value end
 		valueType = record.type
 		payload = record.value
+	end
+
+	if valueType == "Ref" then
+		local guidFromRef = if type(payload) == "string" then payload else nil
+		valueType = "InstanceRef"
+		payload = {
+			guid = guidFromRef,
+			path = nil,
+		}
 	end
 
 	if valueType == "nil" then return nil end
@@ -425,7 +507,7 @@ function Serializer.deserializeValue(value: any): any
 			if type(color) == "table" and color.r ~= nil and color.g ~= nil and color.b ~= nil then
 				color = Color3.new(color.r, color.g, color.b)
 			else
-				color = Serializer.deserializeValue(color)
+				color = Serializer.deserializeValue(color, options)
 			end
 
 			if typeof(color) == "Color3" then
@@ -479,9 +561,31 @@ function Serializer.deserializeValue(value: any): any
 	end
 	if valueType == "Ray" then
 		local source = if type(payload) == "table" then payload else record
-		local origin = Serializer.deserializeValue(source.origin)
-		local direction = Serializer.deserializeValue(source.direction)
+		local origin = Serializer.deserializeValue(source.origin, options)
+		local direction = Serializer.deserializeValue(source.direction, options)
 		if typeof(origin) == "Vector3" and typeof(direction) == "Vector3" then return Ray.new(origin, direction) end
+		return nil
+	end
+	if valueType == "InstanceRef" then
+		local source = if type(payload) == "table" then payload else record
+		local guid = if type(source.guid) == "string" then source.guid else nil
+		local path = if type(source.path) == "table" then source.path else nil
+
+		if guid and options and options.resolveInstanceByGuid then
+			local resolvedByGuid = options.resolveInstanceByGuid(guid)
+			if resolvedByGuid then return resolvedByGuid end
+		end
+
+		if path then
+			if options and options.resolveInstanceByPath then
+				local resolvedByPath = options.resolveInstanceByPath(path)
+				if resolvedByPath then return resolvedByPath end
+			end
+
+			local resolvedByDefaultPath = findInstanceByPath(path)
+			if resolvedByDefaultPath then return resolvedByDefaultPath end
+		end
+
 		return nil
 	end
 	if valueType == "Region3" then
@@ -665,13 +769,19 @@ local function serializedValuesEqual(left, right): boolean
 	return true
 end
 
-local function readAndSerializeProperty(instance: Instance, propertyName: string)
+local function readAndSerializeProperty(
+	instance: Instance,
+	propertyName: string,
+	options: {
+		getInstanceRefData: ((Instance) -> { guid: string?, path: { string }? }?)?,
+	}?
+)
 	local ok, value = pcall(function()
 		return (instance :: any)[propertyName]
 	end)
 	if not ok then return nil end
 
-	return Serializer.serializeValue(value)
+	return Serializer.serializeValue(value, options)
 end
 
 local function getDefaultSerializedPropertiesForClass(className: string): { [string]: any }
@@ -699,7 +809,12 @@ local function getDefaultSerializedPropertiesForClass(className: string): { [str
 	return defaults
 end
 
-function Serializer.collectSerializedProperties(instance: Instance): { [string]: any }
+function Serializer.collectSerializedProperties(
+	instance: Instance,
+	options: {
+		getInstanceRefData: ((Instance) -> { guid: string?, path: { string }? }?)?,
+	}?
+): { [string]: any }
 	local properties = {}
 	local className = instance.ClassName
 	local allowedProperties = Serializer.getWritableSerializablePropertySetForClass(className)
@@ -710,8 +825,9 @@ function Serializer.collectSerializedProperties(instance: Instance): { [string]:
 		if not allowedProperties[propertyName] then continue end
 
 		if propertyName == "Name" or propertyName == "Parent" then continue end
+		if propertyName == "Transparency" and instance:IsA("GuiObject") then continue end
 
-		local serialized = readAndSerializeProperty(instance, propertyName)
+		local serialized = readAndSerializeProperty(instance, propertyName, options)
 		if serialized ~= nil then
 			local defaultSerialized = defaultProperties[propertyName]
 			if defaultSerialized == nil or not serializedValuesEqual(serialized, defaultSerialized) then
@@ -723,15 +839,27 @@ function Serializer.collectSerializedProperties(instance: Instance): { [string]:
 	return properties
 end
 
-function Serializer.applySerializedProperties(instance: Instance, properties: { [string]: any }?)
+function Serializer.applySerializedProperties(
+	instance: Instance,
+	properties: { [string]: any }?,
+	options: {
+		resolveInstanceByGuid: ((string) -> Instance?)?,
+		resolveInstanceByPath: (({ string }) -> Instance?)?,
+	}?
+)
 	if type(properties) ~= "table" then return end
 
 	for propertyName, serialized in pairs(properties) do
 		if propertyName ~= "Name" and propertyName ~= "Parent" and propertyName ~= "Source" then
-			local resolvedProperty = resolveWritablePropertyName(instance, propertyName)
+			local targetPropertyName = propertyName
+			if propertyName == "Transparency" and instance:IsA("GuiObject") then
+				targetPropertyName = "BackgroundTransparency"
+			end
+
+			local resolvedProperty = resolveWritablePropertyName(instance, targetPropertyName)
 			if not resolvedProperty then continue end
 
-			local deserialized = Serializer.deserializeValue(serialized)
+			local deserialized = Serializer.deserializeValue(serialized, options)
 			if deserialized ~= nil then
 				pcall(function()
 					(instance :: any)[resolvedProperty] = deserialized
