@@ -20,7 +20,7 @@
                 {
                   "name": "AzulSync",
                   "className": "Script",
-                  "guid": "11066",
+                  "guid": "11059",
                   "filePaths": [
                     "sync/ReplicatedFirst/AzulCompanionPlugin/Actor/AzulSync.server.luau"
                   ],
@@ -37,7 +37,7 @@
             {
               "name": "AzulService",
               "className": "ModuleScript",
-              "guid": "9574",
+              "guid": "9578",
               "filePaths": [
                 "sync/ReplicatedFirst/AzulCompanionPlugin/AzulService.luau"
               ]
@@ -45,7 +45,7 @@
             {
               "name": "Config",
               "className": "ModuleScript",
-              "guid": "9573",
+              "guid": "9577",
               "filePaths": [
                 "sync/ReplicatedFirst/AzulCompanionPlugin/Config.luau"
               ]
@@ -53,9 +53,17 @@
             {
               "name": "Enums",
               "className": "ModuleScript",
-              "guid": "9572",
+              "guid": "9576",
               "filePaths": [
                 "sync/ReplicatedFirst/AzulCompanionPlugin/Enums.luau"
+              ]
+            },
+            {
+              "name": "Serializer",
+              "className": "ModuleScript",
+              "guid": "443087",
+              "filePaths": [
+                "sync/ReplicatedFirst/AzulCompanionPlugin/Serializer.luau"
               ]
             },
             {
@@ -71,7 +79,7 @@
                     {
                       "name": "CollapsibleTitledSection",
                       "className": "ModuleScript",
-                      "guid": "9565",
+                      "guid": "9569",
                       "filePaths": [
                         "sync/ReplicatedFirst/AzulCompanionPlugin/StudioWidgets/Components/CollapsibleTitledSection.luau"
                       ]
@@ -79,7 +87,7 @@
                     {
                       "name": "ColorPicker",
                       "className": "ModuleScript",
-                      "guid": "9564",
+                      "guid": "9568",
                       "filePaths": [
                         "sync/ReplicatedFirst/AzulCompanionPlugin/StudioWidgets/Components/ColorPicker.luau"
                       ]
@@ -87,7 +95,7 @@
                     {
                       "name": "CustomTextButton",
                       "className": "ModuleScript",
-                      "guid": "9562",
+                      "guid": "9566",
                       "filePaths": [
                         "sync/ReplicatedFirst/AzulCompanionPlugin/StudioWidgets/Components/CustomTextButton.luau"
                       ]
@@ -95,7 +103,7 @@
                     {
                       "name": "DropdownMenu",
                       "className": "ModuleScript",
-                      "guid": "9569",
+                      "guid": "9573",
                       "filePaths": [
                         "sync/ReplicatedFirst/AzulCompanionPlugin/StudioWidgets/Components/DropdownMenu.luau"
                       ]
@@ -103,7 +111,7 @@
                     {
                       "name": "HorizontalLine",
                       "className": "ModuleScript",
-                      "guid": "9568",
+                      "guid": "9572",
                       "filePaths": [
                         "sync/ReplicatedFirst/AzulCompanionPlugin/StudioWidgets/Components/HorizontalLine.luau"
                       ]
@@ -111,7 +119,7 @@
                     {
                       "name": "ImageButtonWithText",
                       "className": "ModuleScript",
-                      "guid": "9570",
+                      "guid": "9574",
                       "filePaths": [
                         "sync/ReplicatedFirst/AzulCompanionPlugin/StudioWidgets/Components/ImageButtonWithText.luau"
                       ]
@@ -119,7 +127,7 @@
                     {
                       "name": "LabeledCheckbox",
                       "className": "ModuleScript",
-                      "guid": "9563",
+                      "guid": "9567",
                       "filePaths": [
                         "sync/ReplicatedFirst/AzulCompanionPlugin/StudioWidgets/Components/LabeledCheckbox.luau"
                       ]
@@ -127,7 +135,7 @@
                     {
                       "name": "LabeledColorInputPicker",
                       "className": "ModuleScript",
-                      "guid": "9566",
+                      "guid": "9570",
                       "filePaths": [
                         "sync/ReplicatedFirst/AzulCompanionPlugin/StudioWidgets/Components/LabeledColorInputPicker.luau"
                       ]
@@ -135,7 +143,7 @@
                     {
                       "name": "LabeledMultiChoice",
                       "className": "ModuleScript",
-                      "guid": "9561",
+                      "guid": "9565",
                       "filePaths": [
                         "sync/ReplicatedFirst/AzulCompanionPlugin/StudioWidgets/Components/LabeledMultiChoice.luau"
                       ]
@@ -143,7 +151,7 @@
                     {
                       "name": "LabeledNumberInput",
                       "className": "ModuleScript",
-                      "guid": "9556",
+                      "guid": "9560",
                       "filePaths": [
                         "sync/ReplicatedFirst/AzulCompanionPlugin/StudioWidgets/Components/LabeledNumberInput.luau"
                       ]
@@ -151,7 +159,7 @@
                     {
                       "name": "LabeledRadioButton",
                       "className": "ModuleScript",
-                      "guid": "9555",
+                      "guid": "9559",
                       "filePaths": [
                         "sync/ReplicatedFirst/AzulCompanionPlugin/StudioWidgets/Components/LabeledRadioButton.luau"
                       ]
@@ -159,7 +167,7 @@
                     {
                       "name": "LabeledSlider",
                       "className": "ModuleScript",
-                      "guid": "9554",
+                      "guid": "9558",
                       "filePaths": [
                         "sync/ReplicatedFirst/AzulCompanionPlugin/StudioWidgets/Components/LabeledSlider.luau"
                       ]
@@ -167,7 +175,7 @@
                     {
                       "name": "LabeledTextInput",
                       "className": "ModuleScript",
-                      "guid": "9557",
+                      "guid": "9561",
                       "filePaths": [
                         "sync/ReplicatedFirst/AzulCompanionPlugin/StudioWidgets/Components/LabeledTextInput.luau"
                       ]
@@ -175,7 +183,7 @@
                     {
                       "name": "LabeledToggleButton",
                       "className": "ModuleScript",
-                      "guid": "9559",
+                      "guid": "9563",
                       "filePaths": [
                         "sync/ReplicatedFirst/AzulCompanionPlugin/StudioWidgets/Components/LabeledToggleButton.luau"
                       ]
@@ -183,7 +191,7 @@
                     {
                       "name": "StatefulImageButton",
                       "className": "ModuleScript",
-                      "guid": "9558",
+                      "guid": "9562",
                       "filePaths": [
                         "sync/ReplicatedFirst/AzulCompanionPlugin/StudioWidgets/Components/StatefulImageButton.luau"
                       ]
@@ -191,7 +199,7 @@
                     {
                       "name": "VerticallyScalingListFrame",
                       "className": "ModuleScript",
-                      "guid": "9560",
+                      "guid": "9564",
                       "filePaths": [
                         "sync/ReplicatedFirst/AzulCompanionPlugin/StudioWidgets/Components/VerticallyScalingListFrame.luau"
                       ]
@@ -199,7 +207,7 @@
                     {
                       "name": "VerticalScrollingFrame",
                       "className": "ModuleScript",
-                      "guid": "9567",
+                      "guid": "9571",
                       "filePaths": [
                         "sync/ReplicatedFirst/AzulCompanionPlugin/StudioWidgets/Components/VerticalScrollingFrame.luau"
                       ]
@@ -207,7 +215,7 @@
                     {
                       "name": "VerticalSpacer",
                       "className": "ModuleScript",
-                      "guid": "9571",
+                      "guid": "9575",
                       "filePaths": [
                         "sync/ReplicatedFirst/AzulCompanionPlugin/StudioWidgets/Components/VerticalSpacer.luau"
                       ]
@@ -217,7 +225,7 @@
                 {
                   "name": "GuiUtilities",
                   "className": "ModuleScript",
-                  "guid": "9553",
+                  "guid": "9557",
                   "filePaths": [
                     "sync/ReplicatedFirst/AzulCompanionPlugin/StudioWidgets/GuiUtilities.luau"
                   ]
@@ -225,7 +233,7 @@
                 {
                   "name": "RbxGui",
                   "className": "ModuleScript",
-                  "guid": "9552",
+                  "guid": "9556",
                   "filePaths": [
                     "sync/ReplicatedFirst/AzulCompanionPlugin/StudioWidgets/RbxGui.luau"
                   ]
@@ -235,15 +243,23 @@
             {
               "name": "UI",
               "className": "ModuleScript",
-              "guid": "9550",
+              "guid": "9554",
               "filePaths": [
                 "sync/ReplicatedFirst/AzulCompanionPlugin/UI.luau"
               ]
             },
             {
+              "name": "ValueSerializer",
+              "className": "ModuleScript",
+              "guid": "749179",
+              "filePaths": [
+                "sync/ReplicatedFirst/AzulCompanionPlugin/Serializer.luau"
+              ]
+            },
+            {
               "name": "WebSocketClient",
               "className": "ModuleScript",
-              "guid": "9551",
+              "guid": "9555",
               "filePaths": [
                 "sync/ReplicatedFirst/AzulCompanionPlugin/WebSocketClient.luau"
               ]
@@ -258,7 +274,7 @@
   ],
   "_azul": {
     "packVersion": 1,
-    "packedAt": "2026-02-26T23:51:44.029Z",
+    "packedAt": "2026-02-28T01:21:18.279Z",
     "mode": "all"
   }
 }
