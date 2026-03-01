@@ -24,6 +24,14 @@ export interface InstanceData {
   path: string[]; // ["ReplicatedStorage", "Modules", "Foo"]
   parentGuid?: string | null; // parent instance GUID
   source?: string; // Only present for Script/LocalScript/ModuleScript
+  properties?: Record<string, unknown>;
+  attributes?: Record<string, unknown>;
+  tags?: string[];
+}
+
+export interface SnapshotRequestOptions {
+  includeProperties?: boolean;
+  scriptsAndDescendantsOnly?: boolean;
 }
 
 /**
@@ -105,6 +113,7 @@ export interface PatchScriptMessage {
 
 export interface RequestSnapshotMessage {
   type: "requestSnapshot";
+  options?: SnapshotRequestOptions;
 }
 
 export interface PongMessage {

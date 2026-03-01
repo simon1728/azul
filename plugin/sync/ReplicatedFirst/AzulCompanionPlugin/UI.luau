@@ -6,12 +6,12 @@
 
 local UI = {}
 
-local Config = require(script.Parent.Config)
-local Enums = require(script.Parent.Enums)
+local Config = require("./Config")
+local Enums = require("./Enums")
 
 UI.__index = UI
 
-type CallbackFunctions = {
+export type CallbackFunctions = {
 	onStartSync: () -> (),
 	onStopSync: () -> (),
 	onDebugModeChanged: (boolean) -> ()?,
@@ -19,6 +19,7 @@ type CallbackFunctions = {
 	onConfigChanged: (string, any) -> (),
 	onSettingsScopeChanged: (number) -> (),
 	onClearGuids: () -> (),
+	onSourcemapReload: () -> (),
 }
 
 type SelfType = {
@@ -45,10 +46,13 @@ type SelfType = {
 	settingsScopeDropdown: any,
 	websocketUrlLabel: any,
 	heartbeatIntervalLabel: any,
+	batchIdleWindowLabel: any,
+	scriptChangeDebounceLabel: any,
 	listTypeLabel: any,
 	serviceListLabel: any,
 	excludedParentsLabel: any,
 	clearGuidsButton: any,
+	reloadSourcemapButton: any,
 
 	GetSyncState: (SelfType) -> boolean,
 	UpdateSyncState: (SelfType, boolean) -> (),
@@ -79,6 +83,19 @@ local function createInfoLabel(text: string)
 	padding.Parent = label
 
 	return label
+end
+
+local function validateNumberInput(newValue: string, callback: (number) -> ())
+	local numberValue = tonumber(newValue)
+	if not numberValue then
+		warn(`[Azul]: (UI): Invalid number input: {newValue}`)
+		return
+	end
+	if numberValue <= 0 then
+		warn(`[Azul]: (UI): Number input must be greater than 0: {newValue}`)
+		return
+	end
+	callback(numberValue)
 end
 
 --[=[
@@ -127,16 +144,13 @@ function UI.new(plugin, callbacks, settingsScope, helpers): SelfType
 	self.isSyncEnabled = false
 
 	-- Import UI components
-	local parentFolder = script.Parent
-	local studioWidgets = parentFolder:FindFirstChild("StudioWidgets")
-	local components = studioWidgets:FindFirstChild("Components")
-	local VerticalScrollingFrame = require(components:FindFirstChild("VerticalScrollingFrame"))
-	local CollapsibleTitledSection = require(components:FindFirstChild("CollapsibleTitledSection"))
-	local CustomTextButton = require(components:FindFirstChild("CustomTextButton"))
-	local LabeledCheckbox = require(components:FindFirstChild("LabeledCheckbox"))
-	local LabeledMultiChoice = require(components:FindFirstChild("LabeledMultiChoice"))
-	local LabeledTextInput = require(components:FindFirstChild("LabeledTextInput"))
-	local DropdownMenu = require(components:FindFirstChild("DropdownMenu"))
+	local VerticalScrollingFrame = require("./StudioWidgets/Components/VerticalScrollingFrame")
+	local CollapsibleTitledSection = require("./StudioWidgets/Components/CollapsibleTitledSection")
+	local CustomTextButton = require("./StudioWidgets/Components/CustomTextButton")
+	local LabeledCheckbox = require("./StudioWidgets/Components/LabeledCheckbox")
+	local LabeledMultiChoice = require("./StudioWidgets/Components/LabeledMultiChoice")
+	local LabeledTextInput = require("./StudioWidgets/Components/LabeledTextInput")
+	local DropdownMenu = require("./StudioWidgets/Components/DropdownMenu")
 
 	-- Create toolbar button
 	local toolbar = plugin:CreateToolbar("Azul")
@@ -161,23 +175,55 @@ function UI.new(plugin, callbacks, settingsScope, helpers): SelfType
 	mainSectionListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
 	-- Main section
-	local mainSection = CollapsibleTitledSection.new("mainSection", "Azul Companion Plugin", true, false, false)
+	local mainSection = CollapsibleTitledSection.new("mainSection", "Azul Companion Plugin", true, false, false, false)
 	mainSection:GetSectionFrame().LayoutOrder = 0
 	mainSection:GetSectionFrame().Parent = mainScrollFrame:GetContentsFrame()
 
 	-- Title image
+	local imageContainer = Instance.new("Frame")
+	imageContainer.Size = UDim2.new(1, 0, 0, 70)
+	imageContainer.BackgroundTransparency = 1
+
+	local imageContainerListLayout = Instance.new("UIListLayout")
+	imageContainerListLayout.FillDirection = Enum.FillDirection.Horizontal
+	imageContainerListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	imageContainerListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	imageContainerListLayout.Parent = imageContainer
+
 	local titleImageLabel = Instance.new("ImageLabel")
-	titleImageLabel.Size = UDim2.new(1, 0, 0, 50)
+	titleImageLabel.Size = UDim2.fromScale(0.2, 1)
+	titleImageLabel.AutomaticSize = Enum.AutomaticSize.X
 	titleImageLabel.BackgroundTransparency = 1
 	titleImageLabel.Image = self.LOGO
 	titleImageLabel.ScaleType = Enum.ScaleType.Fit
-	mainSection:AddChild(titleImageLabel, 0)
+	titleImageLabel.LayoutOrder = 0
+	titleImageLabel.Parent = imageContainer
+
+	local azulText = Instance.new("TextLabel")
+	azulText.Text = "<b>Azul</b>"
+	azulText.RichText = true
+	azulText.Font = Enum.Font.RobotoMono
+	azulText.TextSize = 36
+	azulText.TextScaled = true
+	azulText.Size = UDim2.fromScale(0.1, 1)
+	azulText.AutomaticSize = Enum.AutomaticSize.X
+	azulText.TextColor3 = Color3.fromRGB(255, 255, 255)
+	azulText.BackgroundTransparency = 1
+	azulText.LayoutOrder = 1
+	azulText.Parent = imageContainer
+
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0, 10)
+	padding.PaddingBottom = UDim.new(0, 10)
+	padding.Parent = imageContainer
+
+	mainSection:AddChild(imageContainer, 0)
 	self.titleImageLabel = titleImageLabel
 
 	-- Sync button
 	local syncButton = CustomTextButton.new("toggleSync", "Connect", false)
 	syncButton.Parent = mainScrollFrame:GetContentsFrame()
-	syncButton:SetSize(UDim2.fromScale(1, 0.25))
+	syncButton:SetSize(UDim2.fromScale(1, 0.2))
 
 	local syncButtonPadding = Instance.new("UIPadding")
 	syncButtonPadding.PaddingLeft = UDim.new(0.1, 0)
@@ -196,27 +242,27 @@ function UI.new(plugin, callbacks, settingsScope, helpers): SelfType
 	mainSection:AddChild(syncButton:GetFrame())
 	self.syncButton = syncButton
 
-	-- Debug Mode checkbox
-	local debugModeCheckbox = LabeledCheckbox.new("debugMode", "Debug Mode", Config.DEBUG_MODE, false)
-	debugModeCheckbox:SetValue(Config.DEBUG_MODE)
-	debugModeCheckbox:SetValueChangedFunction(function(newValue)
-		Config.DEBUG_MODE = newValue
-		helpers.debugPrint(`[🐛 AzulUI]: Debug mode set to: {newValue}`)
-	end)
-	mainSection:AddChild(debugModeCheckbox:GetFrame())
-	mainSection:AddChild(createInfoLabel("Debug mode enables verbose logging to the output console."))
-	self.debugModeCheckbox = debugModeCheckbox
-
 	-- Silent Mode checkbox
 	local silentModeCheckbox = LabeledCheckbox.new("silentMode", "Silent Mode", Config.SILENT_MODE, false)
 	silentModeCheckbox:SetValue(Config.SILENT_MODE)
 	silentModeCheckbox:SetValueChangedFunction(function(newValue)
 		Config.SILENT_MODE = newValue
-		helpers.infoPrint(`[🐛 AzulUI]: Silent mode set to: {newValue}`)
+		helpers.infoPrint(`(UI): Silent mode set to: {newValue}`)
 	end)
 	mainSection:AddChild(silentModeCheckbox:GetFrame())
 	mainSection:AddChild(createInfoLabel("Silent mode suppresses all console output except errors."))
 	self.silentModeCheckbox = silentModeCheckbox
+
+	-- Debug Mode checkbox
+	local debugModeCheckbox = LabeledCheckbox.new("debugMode", "Debug Mode", Config.DEBUG_MODE, false)
+	debugModeCheckbox:SetValue(Config.DEBUG_MODE)
+	debugModeCheckbox:SetValueChangedFunction(function(newValue)
+		Config.DEBUG_MODE = newValue
+		helpers.debugPrint(`(UI): Debug mode set to: {newValue}`)
+	end)
+	mainSection:AddChild(debugModeCheckbox:GetFrame())
+	mainSection:AddChild(createInfoLabel("Debug mode enables verbose logging to the output console."))
+	self.debugModeCheckbox = debugModeCheckbox
 
 	-- Settings section
 	local settingsSection = CollapsibleTitledSection.new("settings", "Plugin Settings", true, true, true)
@@ -247,15 +293,50 @@ function UI.new(plugin, callbacks, settingsScope, helpers): SelfType
 		LabeledTextInput.new("heartbeatInterval", "Heartbeat Interval (s):", tostring(Config.HEARTBEAT_INTERVAL))
 	heartbeatIntervalLabel:SetValue(tostring(Config.HEARTBEAT_INTERVAL))
 	heartbeatIntervalLabel:SetValueChangedFunction(function(newValue)
-		local interval = tonumber(newValue)
-		if interval and interval > 0 then
+		validateNumberInput(newValue, function(interval)
 			Config.HEARTBEAT_INTERVAL = interval
 			self.callbacks.onConfigChanged("HEARTBEAT_INTERVAL", interval)
-		end
+		end)
 	end)
 	settingsSection:AddChild(heartbeatIntervalLabel:GetFrame())
 	settingsSection:AddChild(createInfoLabel("Interval in seconds between heartbeat pings to the daemon."))
 	self.heartbeatIntervalLabel = heartbeatIntervalLabel
+
+	-- Batch Idle Window input
+	local batchIdleWindowLabel =
+		LabeledTextInput.new("batchIdleWindow", "Batch Idle Window (s):", tostring(Config.BATCH_IDLE_WINDOW))
+	batchIdleWindowLabel:SetValue(tostring(Config.BATCH_IDLE_WINDOW))
+	batchIdleWindowLabel:SetValueChangedFunction(function(newValue)
+		validateNumberInput(newValue, function(idleWindow)
+			Config.BATCH_IDLE_WINDOW = idleWindow
+			self.callbacks.onConfigChanged("BATCH_IDLE_WINDOW", idleWindow)
+		end)
+	end)
+	settingsSection:AddChild(batchIdleWindowLabel:GetFrame())
+	settingsSection:AddChild(
+		createInfoLabel(
+			"Seconds of inactivity before sending batched updates to the daemon. A lower number means faster updates, a higher number can improve performance."
+		)
+	)
+	self.batchIdleWindowLabel = batchIdleWindowLabel
+
+	-- Script Change Debounce input
+	local scriptChangeDebounceLabel =
+		LabeledTextInput.new("scriptChangeDebounce", "Script Change Deb. (s):", tostring(Config.SCRIPT_CHANGE_DEBOUNCE))
+	scriptChangeDebounceLabel:SetValue(tostring(Config.SCRIPT_CHANGE_DEBOUNCE))
+	scriptChangeDebounceLabel:SetValueChangedFunction(function(newValue)
+		validateNumberInput(newValue, function(debounce)
+			Config.SCRIPT_CHANGE_DEBOUNCE = debounce
+			self.callbacks.onConfigChanged("SCRIPT_CHANGE_DEBOUNCE", debounce)
+		end)
+	end)
+	settingsSection:AddChild(scriptChangeDebounceLabel:GetFrame())
+	settingsSection:AddChild(
+		createInfoLabel(
+			"Debounce time to batch script changes for before sending updates to the daemon. A lower number means faster updates, a higher number can improve performance."
+		)
+	)
+	self.scriptChangeDebounceLabel = scriptChangeDebounceLabel
 
 	-- List type dropdown
 	local listTypeLabel = LabeledMultiChoice.new("listType", "Service List Type:", {
@@ -316,7 +397,7 @@ function UI.new(plugin, callbacks, settingsScope, helpers): SelfType
 
 	-- Settings scope callback
 	settingsScopeDropdown:SetValueChangedFunction(function(newValue: number | string, newText: string)
-		helpers.debugPrint("[🐛 AzulUI]: Settings scope changed to:", newText)
+		helpers.debugPrint("(UI): Settings scope changed to:", newText)
 
 		local newScope
 		if newValue == 1 then
@@ -330,25 +411,23 @@ function UI.new(plugin, callbacks, settingsScope, helpers): SelfType
 		self.callbacks.onSettingsScopeChanged(newScope)
 	end)
 
-	-- Clear legacy GUIDs button
-	local clearGuidsButton = CustomTextButton.new("clearLegacyGUIDs", "Clear Legacy GUIDs", false)
-	clearGuidsButton:SetClickedFunction(function()
-		self.callbacks.onClearGuids()
+	-- Reload sourcemap button
+	local reloadSourcemapButton = CustomTextButton.new("reloadSourcemap", "Reload Sourcemap", false)
+	reloadSourcemapButton:SetClickedFunction(function()
+		self.callbacks.onSourcemapReload()
 	end)
-	clearGuidsButton:SetSize(UDim2.fromScale(1, 0.1))
+	reloadSourcemapButton:SetSize(UDim2.fromScale(1, 0.07))
 
 	local clearButtonPadding = Instance.new("UIPadding")
 	clearButtonPadding.PaddingLeft = UDim.new(0.1, 0)
 	clearButtonPadding.PaddingRight = UDim.new(0.1, 0)
-	clearButtonPadding.Parent = clearGuidsButton:GetFrame()
+	clearButtonPadding.Parent = reloadSourcemapButton:GetFrame()
 
-	settingsSection:AddChild(clearGuidsButton:GetFrame())
+	settingsSection:AddChild(reloadSourcemapButton:GetFrame())
 	settingsSection:AddChild(
-		createInfoLabel(
-			"Removes all stored GUID attributes from instances in the DataModel. Use this to clean GUIDs left by old versions of Azul."
-		)
+		createInfoLabel("Something's not right? Force reload the sourcemap to reset the sync state.")
 	)
-	self.clearGuidsButton = clearGuidsButton
+	self.reloadSourcemapButton = reloadSourcemapButton
 
 	-- Connect button click handler
 	self.connectButton.Click:Connect(function()
@@ -388,6 +467,8 @@ function UI:UpdateConfig()
 	self.settingsScopeDropdown:SetValue(if self.settingsScope == Enums.scope.GLOBAL then 1 else 2)
 	self.websocketUrlLabel:SetValue(Config.WS_URL)
 	self.heartbeatIntervalLabel:SetValue(tostring(Config.HEARTBEAT_INTERVAL))
+	self.batchIdleWindowLabel:SetValue(tostring(Config.BATCH_IDLE_WINDOW))
+	self.scriptChangeDebounceLabel:SetValue(tostring(Config.SCRIPT_CHANGE_DEBOUNCE))
 	self.listTypeLabel:SetSelectedIndex(if Config.LIST_TYPE == Enums.listType.WHITELIST then 1 else 2)
 	self.serviceListLabel:SetValue(table.concat(Config.SERVICE_LIST, ", "))
 	self.excludedParentsLabel:SetValue(table.concat(Config.EXCLUDED_PARENTS, ", "))

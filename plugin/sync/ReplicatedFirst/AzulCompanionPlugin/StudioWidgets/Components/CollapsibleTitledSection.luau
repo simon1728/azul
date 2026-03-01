@@ -39,19 +39,22 @@ CollapsibleTitledSectionClass.__index = CollapsibleTitledSectionClass
 --- @param autoScalingList boolean? -- Should it automatically update its size based on the content? Defaults to true.
 --- @param minimizable boolean? -- Should it be minimizable? Defaults to true.
 --- @param minimizedByDefault boolean? -- Should it start minimized? Defaults to true.
+--- @paramm createTitleBar boolean? -- Should it create a title bar? Defaults to true.
 --- @return CollapsibleTitledSectionClass -- The CollapsibleTitledSection class object.
 function CollapsibleTitledSectionClass.new(
 	nameSuffix: string,
 	titleText: string,
 	autoScalingList: boolean?,
 	minimizable: boolean?,
-	minimizedByDefault: boolean?
+	minimizedByDefault: boolean?,
+	createTitleBar: boolean?
 )
 	local self = {}
 	setmetatable(self, CollapsibleTitledSectionClass)
 
 	self._minimized = minimizedByDefault == true
 	self._minimizable = minimizable == true
+	self._createTitleBar = createTitleBar == nil or createTitleBar == true
 
 	self._titleBarHeight = GuiUtilities.kTitleBarHeight
 
@@ -81,13 +84,11 @@ function CollapsibleTitledSectionClass.new(
 	end)
 	self:_UpdateSize()
 
-	self:_CreateTitleBar(titleText)
+	if self._createTitleBar then self:_CreateTitleBar(titleText) end
 	self:SetCollapsedState(self._minimized)
 
 	self._autoScalingList = autoScalingList == true
-	if self._autoScalingList then
-		GuiUtilities.MakeFrameAutoScalingList(self:GetContentsFrame())
-	end
+	if self._autoScalingList then GuiUtilities.MakeFrameAutoScalingList(self:GetContentsFrame()) end
 
 	return self
 end
@@ -127,9 +128,7 @@ end
 --- Sets the collapsed state. Whether or not its open and showing its contents.
 --- @param state boolean -- A boolean representing the state to set.
 function CollapsibleTitledSectionClass:SetCollapsedState(state: boolean)
-	if not self._minimizable then
-		return
-	end
+	if not self._minimizable then return end
 	self._minimized = state
 	self._contentsFrame.Visible = not state
 	self:_UpdateMinimizeButton()
@@ -137,9 +136,7 @@ function CollapsibleTitledSectionClass:SetCollapsedState(state: boolean)
 end
 
 function CollapsibleTitledSectionClass:_ToggleCollapsedState()
-	if not self._minimizable then
-		return
-	end
+	if not self._minimizable then return end
 	self:SetCollapsedState(not self._minimized)
 end
 
@@ -210,9 +207,7 @@ end
 --- @param childFrame GuiObject -- The GUI object to add to the contents frame.
 --- @param layoutOrder number? -- Optional layout order to assign to the child frame.
 function CollapsibleTitledSectionClass:AddChild(childFrame: GuiObject, layoutOrder: number?)
-	if layoutOrder then
-		childFrame.LayoutOrder = layoutOrder
-	end
+	if layoutOrder then childFrame.LayoutOrder = layoutOrder end
 	childFrame.Parent = self._contentsFrame
 end
 

@@ -19,11 +19,11 @@ local azulPluginFolder = pluginParent.Parent
 if not azulPluginFolder then return end
 
 -- Modules
-local WebSocketClient = require(azulPluginFolder.WebSocketClient)
-local UI = require(azulPluginFolder.UI)
-local CONFIG = require(azulPluginFolder.Config)
-local Enums = require(azulPluginFolder.Enums)
-local AzulService = require(azulPluginFolder.AzulService)
+local WebSocketClient = require("../WebSocketClient")
+local UI = require("../UI")
+local CONFIG = require("../Config")
+local Enums = require("../Enums")
+local AzulService = require("../AzulService")
 
 -- Settings
 local PUSH_CONFIG_PATH = {
@@ -34,6 +34,7 @@ local PUSH_CONFIG_PATH = {
 
 local SETTINGS_SCOPE = Enums.scope.GLOBAL -- or "project"
 local SETTINGS_KEY = "AZUL_SETTINGS"
+local SETTINGS_SCOPE_KEY = "AZUL_SETTINGS_SCOPE_BY_PLACE"
 
 -- Logging helpers
 local function debugPrint(...)
@@ -50,6 +51,26 @@ local function getScopeKey(scope)
 	local placeId = tostring(game.PlaceId or "0")
 	if scope == Enums.scope.PROJECT then return `project_{placeId}` end
 	return "global"
+end
+
+local function getPlaceScopeSelectionKey()
+	return tostring(game.PlaceId or "0")
+end
+
+local function saveSelectedScope()
+	local selectedScopes = plugin:GetSetting(SETTINGS_SCOPE_KEY)
+	if type(selectedScopes) ~= "table" then selectedScopes = {} end
+
+	selectedScopes[getPlaceScopeSelectionKey()] = SETTINGS_SCOPE
+	plugin:SetSetting(SETTINGS_SCOPE_KEY, selectedScopes)
+end
+
+local function loadSelectedScope()
+	local selectedScopes = plugin:GetSetting(SETTINGS_SCOPE_KEY)
+	if type(selectedScopes) ~= "table" then return end
+
+	local scope = selectedScopes[getPlaceScopeSelectionKey()]
+	if scope == Enums.scope.GLOBAL or scope == Enums.scope.PROJECT then SETTINGS_SCOPE = scope end
 end
 
 local _storedSettings = {}
@@ -109,6 +130,13 @@ local function loadSettings()
 	if globalScoped.SILENT_MODE ~= nil then CONFIG.SILENT_MODE = globalScoped.SILENT_MODE end
 end
 
+--- Utility: Safely get a positive number from config, with fallback
+local function safeGetNumber(value, default)
+	if type(value) == "number" and value > 0 then return value end
+	return default
+end
+
+loadSelectedScope()
 loadSettings()
 
 -- Sync state
@@ -127,14 +155,16 @@ local suppressOutbound = false -- Prevent emitting events while applying inbound
 
 local pendingInstanceUpdates = {}
 local pendingScriptChanges = {}
+local pendingScriptChangeReady = {}
+local scriptChangeDebounceTokenByGuid = {}
 local pendingDeletes = {}
 
 local batchingEnabled = false
 local batchFlushToken = 0 -- Incremented to invalidate pending flush timers
 local batchAccumulator = 0
 
+-- Legacy! Does not get used after initial snapshot!
 local BATCH_INTERVAL = 0.2 -- Seconds between outbound batch flushes
-local BATCH_IDLE_WINDOW = 0.1 -- Seconds of inactivity before sending batch
 
 -- Utility: Check if instance is a script
 local function isScript(instance)
@@ -153,7 +183,7 @@ local function shouldIncludeInSnapshot(instance)
 end
 
 -- Send message to daemon
-local function sendMessage(messageTypeOrPayload, data)
+local function sendMessage(messageTypeOrPayload, data: any?)
 	if not wsClient or not wsClient.connected then return false end
 
 	local message
@@ -184,13 +214,31 @@ local function setOutboundSuppressed(suppressed: boolean)
 		-- Drop any pending outbound changes to avoid echoing daemon writes
 		table.clear(pendingInstanceUpdates)
 		table.clear(pendingScriptChanges)
+		table.clear(pendingScriptChangeReady)
+		table.clear(scriptChangeDebounceTokenByGuid)
 		table.clear(pendingDeletes)
 	end
 end
 
 -- Send full snapshot
-local function sendFullSnapshot()
+local function sendFullSnapshot(options: { includeProperties: boolean, scriptsAndDescendantsOnly: boolean }?)
 	infoPrint("Sending full snapshot...")
+
+	local includeProperties = options and options.includeProperties == true
+	local scriptsAndDescendantsOnly = options and options.scriptsAndDescendantsOnly == true
+	local includeAncestorsOfScripts: { [Instance]: boolean } = {}
+
+	if scriptsAndDescendantsOnly then
+		for _, descendant in ipairs(game:GetDescendants()) do
+			if isScript(descendant) and shouldIncludeInSnapshot(descendant) then
+				local current: Instance? = descendant
+				while current and current ~= game do
+					if shouldIncludeInSnapshot(current) then includeAncestorsOfScripts[current] = true end
+					current = current.Parent
+				end
+			end
+		end
+	end
 
 	-- Reset tracking to ensure fresh GUID deduping
 	trackedInstances = {}
@@ -204,7 +252,12 @@ local function sendFullSnapshot()
 	-- Build a queue to iterate without deep recursion
 	local queue = {}
 	for _, service in ipairs(game:GetChildren()) do
-		if shouldIncludeInSnapshot(service) then table.insert(queue, service) end
+		if shouldIncludeInSnapshot(service) then
+			table.insert(queue, {
+				instance = service,
+				hasScriptAncestor = false,
+			})
+		end
 	end
 
 	local index = 1
@@ -214,10 +267,19 @@ local function sendFullSnapshot()
 			return
 		end
 
-		local instance = queue[index]
+		local queued = queue[index]
+		local instance = queued.instance
+		local hasScriptAncestor = queued.hasScriptAncestor == true
 
-		if shouldIncludeInSnapshot(instance) then
-			local data = AzulService.instanceToData(instance, trackedInstances, guidMap, usedGuids)
+		local includeByMode = true
+		if scriptsAndDescendantsOnly then
+			includeByMode = isScript(instance) or hasScriptAncestor or includeAncestorsOfScripts[instance] == true
+		end
+
+		if shouldIncludeInSnapshot(instance) and includeByMode then
+			local data = AzulService.instanceToData(instance, trackedInstances, guidMap, usedGuids, {
+				includeProperties = includeProperties,
+			})
 			if data then
 				table.insert(instances, data)
 
@@ -228,10 +290,15 @@ local function sendFullSnapshot()
 					scriptCount += 1
 				end
 			end
+		end
 
-			-- Enqueue children that are eligible for snapshot
-			for _, child in ipairs(instance:GetChildren()) do
-				if shouldIncludeInSnapshot(child) then table.insert(queue, child) end
+		-- Enqueue children that are eligible for traversal
+		for _, child in ipairs(instance:GetChildren()) do
+			if shouldIncludeInSnapshot(child) then
+				table.insert(queue, {
+					instance = child,
+					hasScriptAncestor = hasScriptAncestor or isScript(instance),
+				})
 			end
 		end
 
@@ -246,6 +313,15 @@ local function sendFullSnapshot()
 	infoPrint("Snapshot sent:", #instances, "instances (", scriptCount, "scripts )")
 
 	if syncEnabled then
+		if includeProperties or scriptsAndDescendantsOnly then
+			debugPrint(
+				`Snapshot sent with options (includeProperties={tostring(includeProperties)}, scriptsAndDescendantsOnly={tostring(
+					scriptsAndDescendantsOnly
+				)}) - stopping sync since "pack" is one-shot.`
+			)
+			stopSync()
+		end
+
 		batchingEnabled = true
 		batchFlushToken += 1 -- Invalidate any pre-snapshot timers
 		batchAccumulator = 0
@@ -264,15 +340,20 @@ local function flushOutboundQueues()
 	end
 
 	for _, payload in pairs(pendingScriptChanges) do
-		table.insert(messages, {
-			type = "scriptChanged",
-			data = {
-				guid = payload.guid,
-				path = payload.path,
-				className = payload.className,
-				source = payload.source,
-			},
-		})
+		if pendingScriptChangeReady[payload.guid] == true then
+			table.insert(messages, {
+				type = "scriptChanged",
+				data = {
+					guid = payload.guid,
+					path = payload.path,
+					className = payload.className,
+					source = payload.source,
+				},
+			})
+			pendingScriptChanges[payload.guid] = nil
+			pendingScriptChangeReady[payload.guid] = nil
+			scriptChangeDebounceTokenByGuid[payload.guid] = nil
+		end
 	end
 
 	for guid, shouldSend in pairs(pendingDeletes) do
@@ -285,7 +366,6 @@ local function flushOutboundQueues()
 	end
 
 	table.clear(pendingInstanceUpdates)
-	table.clear(pendingScriptChanges)
 	table.clear(pendingDeletes)
 
 	if #messages == 0 then return end
@@ -311,7 +391,7 @@ local function scheduleBatchFlush()
 	batchFlushToken += 1
 	local token = batchFlushToken
 
-	task.delay(BATCH_IDLE_WINDOW, function()
+	task.delay(safeGetNumber(CONFIG.BATCH_IDLE_WINDOW, 0.1), function()
 		if token ~= batchFlushToken then return end
 		flushOutboundQueues()
 	end)
@@ -329,8 +409,20 @@ local function queueScriptChange(payload)
 	if suppressOutbound or not syncEnabled then return end
 	if not payload or not payload.guid then return end
 
+	pendingScriptChangeReady[payload.guid] = false
 	pendingScriptChanges[payload.guid] = payload
-	scheduleBatchFlush()
+
+	local token = (scriptChangeDebounceTokenByGuid[payload.guid] or 0) + 1
+	scriptChangeDebounceTokenByGuid[payload.guid] = token
+
+	task.delay(safeGetNumber(CONFIG.SCRIPT_CHANGE_DEBOUNCE, 0.35), function()
+		if not syncEnabled or suppressOutbound then return end
+		if scriptChangeDebounceTokenByGuid[payload.guid] ~= token then return end
+		if not pendingScriptChanges[payload.guid] then return end
+
+		pendingScriptChangeReady[payload.guid] = true
+		scheduleBatchFlush()
+	end)
 end
 
 local function queueDeletion(guid: string)
@@ -539,22 +631,21 @@ local function processMessage(message)
 	elseif message.type == "requestSnapshot" then
 		-- Daemon is requesting a full snapshot
 		infoPrint("Snapshot requested by daemon")
-		sendFullSnapshot()
+		sendFullSnapshot(message.options)
 	elseif message.type == "buildSnapshot" then
 		-- One-time push from filesystem into Studio
 		infoPrint("Applying build snapshot from daemon")
 		setOutboundSuppressed(true)
+
 		local ok, err = pcall(function()
-			local created = AzulService.applySnapshotInstances(message.data)
+			local created, updated, appliedGuidMap = AzulService.applySnapshotInstances(message.data)
 			-- Update tracking with new instances
-			for _, item in ipairs(message.data or {}) do
-				local instance = guidMap[item.guid]
-				if instance then
-					trackedInstances[instance] = item.guid
-					attachListeners(instance)
-				end
+			for guid, instance in pairs(appliedGuidMap) do
+				guidMap[guid] = instance
+				trackedInstances[instance] = guid
+				attachListeners(instance)
 			end
-			infoPrint(`Build snapshot applied ({created} created/updated)`)
+			infoPrint(`Build snapshot applied ({created} created, {updated} updated)`)
 		end)
 
 		setOutboundSuppressed(false)
@@ -579,16 +670,14 @@ local function processMessage(message)
 				local targetContainer = AzulService.getOrCreatePath(destination)
 				if mapping.destructive then wipeChildren(targetContainer) end
 
-				local created = AzulService.applySnapshotInstances(mapping.instances or {})
+				local created, updated, appliedGuidMap = AzulService.applySnapshotInstances(mapping.instances or {})
 				-- Update tracking with new instances
-				for _, item in ipairs(mapping.instances or {}) do
-					local instance = guidMap[item.guid]
-					if instance then
-						trackedInstances[instance] = item.guid
-						attachListeners(instance)
-					end
+				for guid, instance in pairs(appliedGuidMap) do
+					guidMap[guid] = instance
+					trackedInstances[instance] = guid
+					attachListeners(instance)
 				end
-				infoPrint(`Push applied to {table.concat(destination, "/")} ({created} created/updated)`)
+				infoPrint(`Push applied to {table.concat(destination, "/")} ({created} created, {updated} updated)`)
 			end
 		end)
 
@@ -696,7 +785,7 @@ local function startSync()
 		if syncEnabled then
 			-- Send heartbeat periodically
 			local now = os.time()
-			if now - lastHeartbeat > CONFIG.HEARTBEAT_INTERVAL then
+			if now - lastHeartbeat > safeGetNumber(CONFIG.HEARTBEAT_INTERVAL, 30) then
 				sendMessage("ping", {})
 				lastHeartbeat = now
 			end
@@ -744,6 +833,8 @@ function stopSync()
 	batchAccumulator = 0
 	table.clear(pendingInstanceUpdates)
 	table.clear(pendingScriptChanges)
+	table.clear(pendingScriptChangeReady)
+	table.clear(scriptChangeDebounceTokenByGuid)
 	table.clear(pendingDeletes)
 
 	batchingEnabled = false
@@ -760,6 +851,7 @@ end
 -- Cleanup on plugin unload
 plugin.Unloading:Connect(function()
 	saveSettings()
+	saveSelectedScope()
 	stopSync()
 end)
 
@@ -768,7 +860,7 @@ debugPrint("Debug mode is enabled!")
 debugPrint(`Service list type is set to: "{CONFIG.LIST_TYPE}"`)
 
 -- Initialize UI
-local uiCallbacks = {
+local uiCallbacks: UI.CallbackFunctions = {
 	onStartSync = startSync,
 	onStopSync = stopSync,
 	onConfigChanged = function(key, value)
@@ -781,6 +873,7 @@ local uiCallbacks = {
 		-- Persist the current scope before switching
 		saveSettings()
 		SETTINGS_SCOPE = newScope
+		saveSelectedScope()
 		azulUI:SetSettingsScope(SETTINGS_SCOPE)
 		loadSettings()
 		AzulService.rebuildServiceSet(serviceSet)
@@ -790,6 +883,10 @@ local uiCallbacks = {
 		infoPrint(`Settings scope set to {scopeLabel}`)
 	end,
 	onClearGuids = AzulService.clearAllGUIDAttributes,
+	onSourcemapReload = function()
+		infoPrint("Reloading sourcemap...")
+		sendFullSnapshot()
+	end,
 }
 
 local uiHelpers = {
