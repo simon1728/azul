@@ -294,7 +294,72 @@ export class PushCommand {
       );
     }
 
-    return allInstances;
+    return this.dedupeRojoInstances(allInstances);
+  }
+
+  private dedupeRojoInstances(instances: InstanceData[]): InstanceData[] {
+    const byKey = new Map<string, InstanceData>();
+
+    for (const instance of instances) {
+      const key = `${instance.path.join("/")}::${instance.className}`;
+      const existing = byKey.get(key);
+
+      if (!existing) {
+        byKey.set(key, instance);
+        continue;
+      }
+
+      const existingIsFolder = existing.className === "Folder";
+      const incomingIsFolder = instance.className === "Folder";
+
+      if (existingIsFolder && !incomingIsFolder) {
+        byKey.set(key, instance);
+        continue;
+      }
+
+      if (!existingIsFolder && incomingIsFolder) {
+        continue;
+      }
+
+      const existingIsScript = this.isScriptClassName(existing.className);
+      const incomingIsScript = this.isScriptClassName(instance.className);
+
+      if (existingIsScript && incomingIsScript) {
+        if (
+          typeof existing.source === "string" &&
+          typeof instance.source === "string" &&
+          existing.source !== instance.source
+        ) {
+          log.warn(
+            `Rojo push dedupe: conflicting script content at ${instance.path.join("/")} (${instance.className}); keeping first occurrence.`,
+          );
+        }
+      }
+    }
+
+    const deduped = [...byKey.values()];
+    deduped.sort((a, b) => {
+      if (a.path.length !== b.path.length) {
+        return a.path.length - b.path.length;
+      }
+      return a.path.join("/").localeCompare(b.path.join("/"));
+    });
+
+    if (deduped.length !== instances.length) {
+      log.debug(
+        `Rojo push dedupe removed ${instances.length - deduped.length} duplicate instance(s).`,
+      );
+    }
+
+    return deduped;
+  }
+
+  private isScriptClassName(className: string): boolean {
+    return (
+      className === "Script" ||
+      className === "LocalScript" ||
+      className === "ModuleScript"
+    );
   }
 
   private async collectMappings(): Promise<PushConfig["mappings"] | null> {
