@@ -83,34 +83,36 @@ export class FileWatcher {
       const source = fs.readFileSync(filePath, "utf-8");
 
       // Skip if this change was produced by a Studio-originated write.
-      const now = Date.now();
-      const suppressUntil = this.suppressedUntil.get(normalizedPath);
       const expectedSource = this.expectedContents.get(normalizedPath);
-      if (expectedSource !== undefined && source === expectedSource) {
-        log.debug(
-          `File change suppressed (Studio-originated content match): ${normalizedPath}`,
-        );
+      if (expectedSource !== undefined) {
+        if (source === expectedSource) {
+          log.debug(
+            `File change suppressed (Studio-originated content match): ${normalizedPath}`,
+          );
+          this.suppressedUntil.delete(normalizedPath);
+          this.expectedContents.delete(normalizedPath);
+          return;
+        }
+
+        // Expected content mismatched, so this is an external change. Clear stale suppression.
+        this.suppressedUntil.delete(normalizedPath);
+        this.expectedContents.delete(normalizedPath);
+      } else {
+        // No expected content, but check if we're still within a suppression window
+        const now = Date.now();
+        const suppressUntil = this.suppressedUntil.get(normalizedPath);
+        if (suppressUntil && suppressUntil > now) {
+          log.debug(
+            `File change suppressed (Studio-originated): ${normalizedPath}`,
+          );
+          return;
+        }
 
         // Clear the suppression if it's expired
-        if (!suppressUntil || suppressUntil <= now) {
+        if (suppressUntil && suppressUntil <= now) {
           this.suppressedUntil.delete(normalizedPath);
           this.expectedContents.delete(normalizedPath);
         }
-        return;
-      }
-
-      if (suppressUntil && suppressUntil > now) {
-        log.debug(
-          `File change suppressed (Studio-originated): ${normalizedPath}`,
-        );
-        this.expectedContents.delete(normalizedPath);
-        return;
-      }
-
-      // Clear the suppression if it's expired
-      if (suppressUntil && suppressUntil <= now) {
-        this.suppressedUntil.delete(normalizedPath);
-        this.expectedContents.delete(normalizedPath);
       }
 
       log.debug(`File changed: ${normalizedPath}`);
