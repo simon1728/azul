@@ -227,10 +227,44 @@ export class PushCommand {
 
     const projectFiles = await this.resolveRojoProjectFiles(sourceRootOpt);
     if (projectFiles.length === 0) {
-      log.error(
-        "Rojo compatibility mode could not find default.project.json. Provide --rojo-project or point --source to a folder that contains one.",
+      if (!sourceRootOpt) {
+        log.error(
+          "Rojo compatibility mode could not find default.project.json. Provide --rojo-project or point --source to a folder that contains one.",
+        );
+        return null;
+      }
+
+      const sourceRoot = path.resolve(process.cwd(), sourceRootOpt);
+      if (!fs.existsSync(sourceRoot)) {
+        log.error(
+          `Source path not found for Rojo compatibility mode: ${sourceRoot}`,
+        );
+        return null;
+      }
+
+      log.warn(
+        "No default.project.json found; falling back to loose script import with Rojo-style init module handling.",
       );
-      return null;
+
+      const loose = await this.collectLooseScripts(
+        sourceRoot,
+        destSegments,
+        new Set<string>(),
+        new Set<string>(),
+        new Set<string>(),
+      );
+
+      log.info(
+        `Rojo compatibility imported ${loose.length} loose instance(s) without a project JSON from ${sourceRoot}`,
+      );
+
+      if (loose.length === 0) {
+        log.warn(
+          `Rojo compatibility fallback found no scripts under ${sourceRoot}.`,
+        );
+      }
+
+      return this.dedupeRojoInstances(loose);
     }
 
     const allInstances: InstanceData[] = [];
@@ -286,6 +320,12 @@ export class PushCommand {
         existingPaths,
       );
       allInstances.push(...loose);
+
+      if (loose.length > 0) {
+        log.info(
+          `Rojo compatibility imported ${loose.length} loose instance(s) not covered by default.project.json files.`,
+        );
+      }
     }
 
     if (allInstances.length === 0) {
