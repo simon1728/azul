@@ -382,6 +382,7 @@ function UI.new(plugin, callbacks, settingsScope, helpers): SelfType
 	-- Excluded Parents input
 	local excludedParentsLabel =
 		LabeledTextInput.new("excludedParents", "Excluded Parents:", table.concat(Config.EXCLUDED_PARENTS, ", "))
+	excludedParentsLabel:SetMaxGraphemes(9999)
 	excludedParentsLabel:SetValue(table.concat(Config.EXCLUDED_PARENTS, ", "))
 	excludedParentsLabel:SetValueChangedFunction(function(newValue)
 		local excluded = {}
