@@ -3,7 +3,6 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as http from "http";
 import { IPCServer } from "./ipc/server.js";
-import { HttpPollingServer } from "./ipc/httpPolling.js";
 import { TreeManager, TreeNode } from "./fs/treeManager.js";
 import { FileWriter } from "./fs/fileWriter.js";
 import { FileWatcher } from "./fs/watcher.js";
@@ -17,7 +16,6 @@ import type { StudioMessage } from "./ipc/messages.js";
  */
 export class SyncDaemon {
   private ipc: IPCServer;
-  private httpPolling: HttpPollingServer;
   private httpServer: http.Server;
   private tree: TreeManager;
   private fileWriter: FileWriter;
@@ -31,15 +29,11 @@ export class SyncDaemon {
     this.fileWriter = new FileWriter(config.syncDir);
     this.fileWatcher = new FileWatcher();
     this.sourcemapGenerator = new SourcemapGenerator();
-    this.httpPolling = new HttpPollingServer();
 
-    // Create HTTP server that handles both WebSocket upgrades and HTTP polling
-    this.httpServer = http.createServer((req, res) => {
-      const handled = this.httpPolling.handleRequest(req, res);
-      if (!handled) {
-        res.writeHead(404);
-        res.end("Not found");
-      }
+    // HTTP server is used for WebSocket upgrade handling.
+    this.httpServer = http.createServer((_, res) => {
+      res.writeHead(404);
+      res.end("Not found");
     });
 
     this.ipc = new IPCServer(config.port, this.httpServer);
@@ -54,9 +48,6 @@ export class SyncDaemon {
   private setupHandlers(): void {
     // Handle messages from Studio (WebSocket)
     this.ipc.onMessage((message) => this.handleStudioMessage(message));
-
-    // Handle messages from Studio (HTTP polling)
-    this.httpPolling.onMessage((message) => this.handleStudioMessage(message));
 
     // Handle file changes from filesystem
     this.fileWatcher.onChange((filePath, source) => {
@@ -336,9 +327,8 @@ export class SyncDaemon {
       // Update tree
       this.tree.updateScriptSource(guid, source);
 
-      // Send patch to Studio (both WebSocket and HTTP polling clients)
+      // Send patch to Studio (WebSocket client)
       this.ipc.patchScript(guid, source);
-      this.httpPolling.broadcast({ type: "patchScript", guid, source });
     } else {
       log.warn(`No mapping found for file: ${filePath}`);
     }
