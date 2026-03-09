@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { log } from "./util/log.js";
+import { classifyScriptFileName, isScriptFileName } from "./util/scriptFile.js";
 import type { InstanceData } from "./ipc/messages.js";
 
 export interface SnapshotOptions {
@@ -52,9 +53,11 @@ export class SnapshotBuilder {
         continue;
       }
 
-      if (entry.name.endsWith(".luau") || entry.name.endsWith(".lua")) {
+      if (isScriptFileName(entry.name)) {
         const relSegments = this.relativeSegments(fullPath);
-        const { className, scriptName } = this.classifyScript(entry.name);
+        const { className, scriptName } = classifyScriptFileName(entry.name, {
+          stripDisambiguationSuffix: true,
+        });
         const dirSegments = relSegments.slice(0, -1);
         if (dirSegments.length > 0) {
           this.ensureFolder(dirSegments);
@@ -122,33 +125,6 @@ export class SnapshotBuilder {
     const rel = path.relative(this.sourceDir, targetPath);
     if (!rel || rel === "") return [];
     return rel.split(path.sep).filter(Boolean);
-  }
-
-  private classifyScript(fileName: string): {
-    className: "Script" | "LocalScript" | "ModuleScript";
-    scriptName: string;
-  } {
-    if (fileName.endsWith(".lua")) {
-      fileName = fileName.replace(/\.lua$/i, ".luau");
-    }
-
-    const base = fileName.replace(/\.luau$/i, "");
-    if (base.endsWith(".server")) {
-      return { className: "Script", scriptName: base.replace(/\.server$/, "") };
-    }
-    if (base.endsWith(".client")) {
-      return {
-        className: "LocalScript",
-        scriptName: base.replace(/\.client$/, ""),
-      };
-    }
-    if (base.endsWith(".module")) {
-      return {
-        className: "ModuleScript",
-        scriptName: base.replace(/\.module$/, ""),
-      };
-    }
-    return { className: "ModuleScript", scriptName: base };
   }
 
   private makeGuid(): string {

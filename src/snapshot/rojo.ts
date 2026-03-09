@@ -2,6 +2,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { log } from "../util/log.js";
+import {
+  classifyScriptFileName,
+  isScriptFileName,
+} from "../util/scriptFile.js";
 import type { InstanceData } from "../ipc/messages.js";
 
 interface RojoProject {
@@ -51,13 +55,13 @@ export class RojoSnapshotBuilder {
       const rootKind = await this.pathKind(absRoot);
 
       if (rootKind === "file") {
-        if (!this.isScriptFile(path.basename(absRoot))) {
+        if (!isScriptFileName(path.basename(absRoot))) {
           throw new Error(
             `$path target ${absRoot} must be a .lua or .luau script file.`,
           );
         }
 
-        const { className, scriptName } = this.classifyScript(
+        const { className, scriptName } = classifyScriptFileName(
           path.basename(absRoot),
         );
         const source = await fs.readFile(absRoot, "utf-8");
@@ -203,7 +207,7 @@ export class RojoSnapshotBuilder {
       initScript = await this.findInit(absPath);
     } else if (absPath && pathKind === "file") {
       const fileName = path.basename(absPath);
-      if (!this.isScriptFile(fileName)) {
+      if (!isScriptFileName(fileName)) {
         throw new Error(`$path target ${absPath} is not a .lua/.luau file.`);
       }
       const source = await fs.readFile(absPath, "utf-8");
@@ -214,7 +218,7 @@ export class RojoSnapshotBuilder {
     if (initScript) {
       this.ensureFolder(pathSegments.slice(0, -1), results);
       this.moduleContainers.add(pathSegments.join("/"));
-      const scriptClass = this.classifyScript(initScript.fileName).className;
+      const scriptClass = classifyScriptFileName(initScript.fileName).className;
       results.push({
         guid: this.makeGuid(),
         className: scriptClass,
@@ -286,7 +290,7 @@ export class RojoSnapshotBuilder {
       if (!this.moduleContainers.has(key)) {
         this.moduleContainers.add(key);
         this.ensureFolder(destPath.slice(0, -1), results);
-        const scriptClass = this.classifyScript(initEntry.name).className;
+        const scriptClass = classifyScriptFileName(initEntry.name).className;
         const source = await fs.readFile(
           path.join(dirPath, initEntry.name),
           "utf-8",
@@ -344,12 +348,12 @@ export class RojoSnapshotBuilder {
         continue;
       }
 
-      if (this.isScriptFile(entry.name)) {
+      if (isScriptFileName(entry.name)) {
         const baseName = path.parse(entry.name).name;
         if (definedChildren.has(baseName)) {
           continue;
         }
-        const { className, scriptName } = this.classifyScript(entry.name);
+        const { className, scriptName } = classifyScriptFileName(entry.name);
         if (definedChildren.has(scriptName)) {
           continue;
         }
@@ -410,35 +414,6 @@ export class RojoSnapshotBuilder {
     }
 
     return [...new Set(variants)];
-  }
-
-  private isScriptFile(fileName: string): boolean {
-    return fileName.endsWith(".lua") || fileName.endsWith(".luau");
-  }
-
-  private classifyScript(fileName: string): {
-    className: "Script" | "LocalScript" | "ModuleScript";
-    scriptName: string;
-  } {
-    const normalized = fileName.replace(/\.lua$/i, ".luau");
-    const base = normalized.replace(/\.luau$/i, "");
-
-    if (base.endsWith(".server")) {
-      return { className: "Script", scriptName: base.replace(/\.server$/, "") };
-    }
-    if (base.endsWith(".client")) {
-      return {
-        className: "LocalScript",
-        scriptName: base.replace(/\.client$/, ""),
-      };
-    }
-    if (base.endsWith(".module")) {
-      return {
-        className: "ModuleScript",
-        scriptName: base.replace(/\.module$/, ""),
-      };
-    }
-    return { className: "ModuleScript", scriptName: base };
   }
 
   private async exists(target: string): Promise<boolean> {

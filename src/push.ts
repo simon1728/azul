@@ -7,6 +7,7 @@ import { log } from "./util/log.js";
 import { SnapshotBuilder } from "./snapshot.js";
 import { RojoSnapshotBuilder } from "./snapshot/rojo.js";
 import { generateGUID } from "./util/id.js";
+import { classifyScriptFileName, isScriptFileName } from "./util/scriptFile.js";
 import {
   applySourcemapProperties,
   buildInstancesFromSourcemap,
@@ -227,10 +228,44 @@ export class PushCommand {
 
     const projectFiles = await this.resolveRojoProjectFiles(sourceRootOpt);
     if (projectFiles.length === 0) {
-      log.error(
-        "Rojo compatibility mode could not find default.project.json. Provide --rojo-project or point --source to a folder that contains one.",
+      if (!sourceRootOpt) {
+        log.error(
+          "Rojo compatibility mode could not find default.project.json. Provide --rojo-project or point --source to a folder that contains one.",
+        );
+        return null;
+      }
+
+      const sourceRoot = path.resolve(process.cwd(), sourceRootOpt);
+      if (!fs.existsSync(sourceRoot)) {
+        log.error(
+          `Source path not found for Rojo compatibility mode: ${sourceRoot}`,
+        );
+        return null;
+      }
+
+      log.warn(
+        "No default.project.json found; falling back to loose script import with Rojo-style init module handling.",
       );
-      return null;
+
+      const loose = await this.collectLooseScripts(
+        sourceRoot,
+        destSegments,
+        new Set<string>(),
+        new Set<string>(),
+        new Set<string>(),
+      );
+
+      log.info(
+        `Rojo compatibility imported ${loose.length} loose instance(s) without a project JSON from ${sourceRoot}`,
+      );
+
+      if (loose.length === 0) {
+        log.warn(
+          `Rojo compatibility fallback found no scripts under ${sourceRoot}.`,
+        );
+      }
+
+      return this.dedupeRojoInstances(loose);
     }
 
     const allInstances: InstanceData[] = [];
@@ -286,6 +321,12 @@ export class PushCommand {
         existingPaths,
       );
       allInstances.push(...loose);
+
+      if (loose.length > 0) {
+        log.info(
+          `Rojo compatibility imported ${loose.length} loose instance(s) not covered by default.project.json files.`,
+        );
+      }
     }
 
     if (allInstances.length === 0) {
@@ -628,7 +669,9 @@ export class PushCommand {
 
       if (initEntry) {
         const full = path.join(dir, initEntry.name);
-        const { className } = this.classifyScript(initEntry.name);
+        const { className } = classifyScriptFileName(initEntry.name, {
+          stripDisambiguationSuffix: true,
+        });
         const destPath = [...destSegments, ...relSegments];
         const key = destPath.join("/");
         if (!emittedPaths.has(key)) {
@@ -656,9 +699,11 @@ export class PushCommand {
           continue; // already emitted as the container
         }
 
-        if (!this.isScriptFile(entry.name)) continue;
+        if (!isScriptFileName(entry.name)) continue;
 
-        const { className, scriptName } = this.classifyScript(entry.name);
+        const { className, scriptName } = classifyScriptFileName(entry.name, {
+          stripDisambiguationSuffix: true,
+        });
         const destPath = [...destSegments, ...relSegments, scriptName];
         const key = destPath.join("/");
         if (emittedPaths.has(key)) continue;
@@ -695,35 +740,6 @@ export class PushCommand {
       name: pathSegments[pathSegments.length - 1],
       path: [...pathSegments],
     });
-  }
-
-  private isScriptFile(fileName: string): boolean {
-    return fileName.endsWith(".lua") || fileName.endsWith(".luau");
-  }
-
-  private classifyScript(fileName: string): {
-    className: "Script" | "LocalScript" | "ModuleScript";
-    scriptName: string;
-  } {
-    const normalized = fileName.replace(/\.lua$/i, ".luau");
-    const base = normalized.replace(/\.luau$/i, "");
-
-    if (base.endsWith(".server")) {
-      return { className: "Script", scriptName: base.replace(/\.server$/, "") };
-    }
-    if (base.endsWith(".client")) {
-      return {
-        className: "LocalScript",
-        scriptName: base.replace(/\.client$/, ""),
-      };
-    }
-    if (base.endsWith(".module")) {
-      return {
-        className: "ModuleScript",
-        scriptName: base.replace(/\.module$/, ""),
-      };
-    }
-    return { className: "ModuleScript", scriptName: base };
   }
 
   /**

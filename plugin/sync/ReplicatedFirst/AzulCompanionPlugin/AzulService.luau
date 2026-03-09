@@ -1,5 +1,6 @@
 --!strict
 local AzulService = {}
+AzulService.VERSION = 40
 
 -- Services
 local ScriptEditorService = game:GetService("ScriptEditorService")
@@ -27,6 +28,7 @@ end
 local function isScript(instance)
 	return instance:IsA("Script") or instance:IsA("LocalScript") or instance:IsA("ModuleScript")
 end
+
 --[=[
 	Utility: Rebuild service set from config
 	@param serviceSet { [string]: boolean } - The service set to rebuild
@@ -287,8 +289,38 @@ function AzulService.applySnapshotInstances(instances: { InstanceData }): (numbe
 		return #a.path < #b.path
 	end)
 
+	local function isScriptClass(className: string): boolean
+		return className == "Script" or className == "LocalScript" or className == "ModuleScript"
+	end
+
+	local function computeAdjustedPath(
+		pathSegments: { string },
+		lockedContainerParentsMap: { [string]: string }
+	): ({ string }, string?)
+		local adjustedPath = {}
+		for i, segment in ipairs(pathSegments) do
+			adjustedPath[i] = segment
+		end
+
+		local protectedContainerName: string? = nil
+		local first = adjustedPath[1]
+		local maybeParent = lockedContainerParentsMap[first]
+		if maybeParent and maybeParent ~= first then
+			table.insert(adjustedPath, 1, maybeParent)
+			protectedContainerName = adjustedPath[2]
+		end
+
+		if not protectedContainerName and #adjustedPath >= 2 then
+			local second = adjustedPath[2]
+			if lockedContainerParentsMap[second] == adjustedPath[1] then protectedContainerName = second end
+		end
+
+		return adjustedPath, protectedContainerName
+	end
+
 	local siblingOrdinalByPathClass: { [string]: number } = {}
 	local existingInstancesByGuid: { [string]: Instance } = {}
+	local initialStudioGuids: { [string]: boolean } = {}
 	local resolvedInstancesByGuid: { [string]: Instance } = {}
 	local deferredPropertyApplications: { { instance: Instance, properties: { [string]: any }? } } = {}
 
@@ -305,7 +337,10 @@ function AzulService.applySnapshotInstances(instances: { InstanceData }): (numbe
 
 	for _, existing in ipairs(game:GetDescendants()) do
 		local guid = existing:GetDebugId(0)
-		if type(guid) == "string" and guid ~= "" then existingInstancesByGuid[guid] = existing end
+		if type(guid) == "string" and guid ~= "" then
+			existingInstancesByGuid[guid] = existing
+			initialStudioGuids[guid] = true
+		end
 	end
 
 	local function findInstanceByPath(pathSegments: { string }): Instance?
@@ -329,23 +364,7 @@ function AzulService.applySnapshotInstances(instances: { InstanceData }): (numbe
 	end
 
 	for _, item in instances do
-		local adjustedPath = {}
-		for i, segment in ipairs(item.path) do
-			adjustedPath[i] = segment
-		end
-
-		local protectedContainerName: string? = nil
-		local first = adjustedPath[1]
-		local maybeParent = lockedContainerParents[first]
-		if maybeParent and maybeParent ~= first then
-			table.insert(adjustedPath, 1, maybeParent)
-			protectedContainerName = adjustedPath[2]
-		end
-
-		if not protectedContainerName and #adjustedPath >= 2 then
-			local second = adjustedPath[2]
-			if lockedContainerParents[second] == adjustedPath[1] then protectedContainerName = second end
-		end
+		local adjustedPath, protectedContainerName = computeAdjustedPath(item.path, lockedContainerParents)
 
 		local serviceCandidate: Instance? = nil
 		if #adjustedPath == 1 then
@@ -365,6 +384,36 @@ function AzulService.applySnapshotInstances(instances: { InstanceData }): (numbe
 			parent = resolvedInstancesByGuid[item.parentGuid] or existingInstancesByGuid[item.parentGuid]
 		end
 		if not parent then parent = AzulService.getOrCreatePath(parentPath) end
+
+		local targetName = adjustedPath[#adjustedPath]
+		if isScriptClass(item.className) then
+			local sameNameChildren = {}
+			local hasPreExistingSameNamed = false
+
+			for _, child in ipairs((parent :: Instance):GetChildren()) do
+				if child.Name == targetName and child.ClassName == item.className then
+					table.insert(sameNameChildren, child)
+					local childGuid = child:GetDebugId(0)
+					if type(childGuid) == "string" and childGuid ~= "" and initialStudioGuids[childGuid] then
+						hasPreExistingSameNamed = true
+					end
+				end
+			end
+
+			if hasPreExistingSameNamed then
+				for _, child in ipairs(sameNameChildren) do
+					if not AzulService.isProtectedRobloxContainer(child) then
+						local childGuid = child:GetDebugId(0)
+						if type(childGuid) == "string" and childGuid ~= "" then
+							existingInstancesByGuid[childGuid] = nil
+							resolvedInstancesByGuid[childGuid] = nil
+						end
+						child:Destroy()
+					end
+				end
+			end
+		end
+
 		local existing: Instance? = nil
 		if type(item.guid) == "string" and item.guid ~= "" then
 			existing = existingInstancesByGuid[item.guid]
@@ -379,8 +428,8 @@ function AzulService.applySnapshotInstances(instances: { InstanceData }): (numbe
 				fallbackMatchCount += 1
 			end
 		end
+
 		if not existing then
-			local targetName = adjustedPath[#adjustedPath]
 			local targetClassName = item.className
 			local occurrenceKey = table.concat(adjustedPath, "\u{1F}") .. "::" .. tostring(targetClassName)
 			local occurrenceOrdinal = (siblingOrdinalByPathClass[occurrenceKey] or 0) + 1
@@ -396,11 +445,8 @@ function AzulService.applySnapshotInstances(instances: { InstanceData }): (numbe
 				fallbackMatchCount += 1
 			end
 		end
-		local instance = existing
 
-		local function isScriptClass(className: string)
-			return className == "Script" or className == "LocalScript" or className == "ModuleScript"
-		end
+		local instance = existing
 
 		if existing and existing.ClassName ~= item.className then
 			local targetIsScript = isScriptClass(item.className)

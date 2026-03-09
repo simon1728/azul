@@ -217,11 +217,7 @@ export class FileWriter {
 
     // If another GUID already owns this path, disambiguate using a stable suffix
     if (collision && collision !== node.guid) {
-      const ext = config.scriptExtension;
-      const uniqueName = `${this.sanitizeName(node.name)}__${node.guid.slice(
-        0,
-        8,
-      )}${ext}`;
+      const uniqueName = this.getDisambiguatedScriptFileName(node);
       const uniqueParts = [...parts.slice(0, -1), uniqueName];
       return path.join(this.baseDir, ...uniqueParts);
     }
@@ -257,6 +253,29 @@ export class FileWriter {
     }
 
     return `${name}${ext}`;
+  }
+
+  /**
+   * Keep Script/LocalScript suffixes when disambiguating collisions.
+   */
+  private getDisambiguatedScriptFileName(node: TreeNode): string {
+    const baseFileName = this.getScriptFileName(node);
+    const ext = config.scriptExtension;
+    const guidSuffix = `__${node.guid.slice(0, 8)}`;
+
+    if (!baseFileName.endsWith(ext)) {
+      return `${baseFileName}${guidSuffix}`;
+    }
+
+    const stem = baseFileName.slice(0, -ext.length);
+    const classSuffixMatch = stem.match(/(\.(?:server|client|module))$/);
+    if (classSuffixMatch) {
+      const classSuffix = classSuffixMatch[1];
+      const rawName = stem.slice(0, -classSuffix.length);
+      return `${rawName}${guidSuffix}${classSuffix}${ext}`;
+    }
+
+    return `${stem}${guidSuffix}${ext}`;
   }
 
   /**

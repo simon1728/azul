@@ -6,6 +6,7 @@
 
 local UI = {}
 
+local AzulService = require("./AzulService")
 local Config = require("./Config")
 local Enums = require("./Enums")
 
@@ -382,6 +383,7 @@ function UI.new(plugin, callbacks, settingsScope, helpers): SelfType
 	-- Excluded Parents input
 	local excludedParentsLabel =
 		LabeledTextInput.new("excludedParents", "Excluded Parents:", table.concat(Config.EXCLUDED_PARENTS, ", "))
+	excludedParentsLabel:SetMaxGraphemes(9999)
 	excludedParentsLabel:SetValue(table.concat(Config.EXCLUDED_PARENTS, ", "))
 	excludedParentsLabel:SetValueChangedFunction(function(newValue)
 		local excluded = {}
@@ -430,6 +432,8 @@ function UI.new(plugin, callbacks, settingsScope, helpers): SelfType
 		createInfoLabel("Something's not right? Force reload the sourcemap to reset the sync state.")
 	)
 	self.reloadSourcemapButton = reloadSourcemapButton
+
+	settingsSection:AddChild(createInfoLabel(`Azul Plugin: v{AzulService.VERSION}`))
 
 	-- Connect button click handler
 	self.connectButton.Click:Connect(function()
