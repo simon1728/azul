@@ -7,6 +7,7 @@ import { log } from "./util/log.js";
 import { SnapshotBuilder } from "./snapshot.js";
 import { RojoSnapshotBuilder } from "./snapshot/rojo.js";
 import { generateGUID } from "./util/id.js";
+import { classifyScriptFileName, isScriptFileName } from "./util/scriptFile.js";
 import {
   applySourcemapProperties,
   buildInstancesFromSourcemap,
@@ -668,7 +669,9 @@ export class PushCommand {
 
       if (initEntry) {
         const full = path.join(dir, initEntry.name);
-        const { className } = this.classifyScript(initEntry.name);
+        const { className } = classifyScriptFileName(initEntry.name, {
+          stripDisambiguationSuffix: true,
+        });
         const destPath = [...destSegments, ...relSegments];
         const key = destPath.join("/");
         if (!emittedPaths.has(key)) {
@@ -696,9 +699,11 @@ export class PushCommand {
           continue; // already emitted as the container
         }
 
-        if (!this.isScriptFile(entry.name)) continue;
+        if (!isScriptFileName(entry.name)) continue;
 
-        const { className, scriptName } = this.classifyScript(entry.name);
+        const { className, scriptName } = classifyScriptFileName(entry.name, {
+          stripDisambiguationSuffix: true,
+        });
         const destPath = [...destSegments, ...relSegments, scriptName];
         const key = destPath.join("/");
         if (emittedPaths.has(key)) continue;
@@ -735,35 +740,6 @@ export class PushCommand {
       name: pathSegments[pathSegments.length - 1],
       path: [...pathSegments],
     });
-  }
-
-  private isScriptFile(fileName: string): boolean {
-    return fileName.endsWith(".lua") || fileName.endsWith(".luau");
-  }
-
-  private classifyScript(fileName: string): {
-    className: "Script" | "LocalScript" | "ModuleScript";
-    scriptName: string;
-  } {
-    const normalized = fileName.replace(/\.lua$/i, ".luau");
-    const base = normalized.replace(/\.luau$/i, "");
-
-    if (base.endsWith(".server")) {
-      return { className: "Script", scriptName: base.replace(/\.server$/, "") };
-    }
-    if (base.endsWith(".client")) {
-      return {
-        className: "LocalScript",
-        scriptName: base.replace(/\.client$/, ""),
-      };
-    }
-    if (base.endsWith(".module")) {
-      return {
-        className: "ModuleScript",
-        scriptName: base.replace(/\.module$/, ""),
-      };
-    }
-    return { className: "ModuleScript", scriptName: base };
   }
 
   /**

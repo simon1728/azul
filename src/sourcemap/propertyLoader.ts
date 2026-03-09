@@ -2,6 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { log } from "../util/log.js";
+import {
+  isScriptClassName,
+  stripScriptDisambiguationSuffix,
+} from "../util/scriptFile.js";
 import type { InstanceData } from "../ipc/messages.js";
 
 interface SourcemapNode {
@@ -29,6 +33,11 @@ export interface SourcemapPropertyIndex {
 const pathClassKey = (segments: string[], className: string): string =>
   `${segments.join("\u0001")}::${className}`;
 
+const normalizeNodeName = (node: SourcemapNode): string =>
+  isScriptClassName(node.className)
+    ? stripScriptDisambiguationSuffix(node.name)
+    : node.name;
+
 export function loadSourcemapPropertyIndex(
   sourcemapPath: string,
 ): SourcemapPropertyIndex | null {
@@ -51,7 +60,8 @@ export function loadSourcemapPropertyIndex(
   const byPathClass = new Map<string, SourcemapNode[]>();
 
   const visit = (node: SourcemapNode, currentPath: string[]) => {
-    const nodePath = [...currentPath, node.name];
+    const nodeName = normalizeNodeName(node);
+    const nodePath = [...currentPath, nodeName];
 
     if (node.guid) {
       byGuid.set(node.guid, node);
@@ -136,13 +146,14 @@ export function buildInstancesFromSourcemap(
     currentPath: string[],
     parentGuid?: string,
   ) => {
-    const nodePath = [...currentPath, node.name];
+    const nodeName = normalizeNodeName(node);
+    const nodePath = [...currentPath, nodeName];
     const guid = node.guid ?? randomUUID().replace(/-/g, "");
 
     const instance: InstanceData = {
       guid,
       className: node.className,
-      name: node.name,
+      name: nodeName,
       path: nodePath,
       parentGuid,
     };
@@ -151,10 +162,7 @@ export function buildInstancesFromSourcemap(
     if (node.attributes) instance.attributes = node.attributes;
     if (node.tags) instance.tags = node.tags;
 
-    const isScript =
-      node.className === "Script" ||
-      node.className === "LocalScript" ||
-      node.className === "ModuleScript";
+    const isScript = isScriptClassName(node.className);
 
     if (isScript && node.filePaths && node.filePaths.length > 0) {
       const scriptPath = path.resolve(process.cwd(), node.filePaths[0]);
