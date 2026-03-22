@@ -100,6 +100,7 @@ export type DaemonMessage =
   | PatchScriptMessage
   | RequestSnapshotMessage
   | PongMessage
+  | DaemonDisconnectMessage
   | ErrorMessage
   | BuildSnapshotMessage
   | RequestPushConfigMessage
@@ -118,6 +119,10 @@ export interface RequestSnapshotMessage {
 
 export interface PongMessage {
   type: "pong";
+}
+
+export interface DaemonDisconnectMessage {
+  type: "daemonDisconnect";
 }
 
 export interface ErrorMessage {

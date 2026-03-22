@@ -690,6 +690,9 @@ local function processMessage(message)
 		end)
 	elseif message.type == "requestPushConfig" then
 		sendDaemonConfig(true)
+	elseif message.type == "daemonDisconnect" then
+		infoPrint("Daemon is shutting down; disconnecting plugin")
+		stopSync(true)
 	elseif message.type == "error" then
 		warn("[Azul]: Daemon error:", message.message)
 	elseif message.type == "pong" then
@@ -792,7 +795,11 @@ local function startSync()
 			-- Send heartbeat periodically
 			local now = os.time()
 			if now - lastHeartbeat > safeGetNumber(CONFIG.HEARTBEAT_INTERVAL, 30) then
-				sendMessage("ping", {})
+				if not sendMessage("ping", {}) then
+					warn("[Azul]: Lost connection to daemon")
+					stopSync()
+					return
+				end
 				lastHeartbeat = now
 			end
 
@@ -814,10 +821,10 @@ local function startSync()
 end
 
 -- Stop sync
-function stopSync()
+function stopSync(dontRelayDisconnect: boolean?)
 	if not syncEnabled then return end
 
-	sendMessage("clientDisconnect", {})
+	if not dontRelayDisconnect then sendMessage("clientDisconnect", {}) end
 
 	infoPrint("Stopping sync...")
 	syncEnabled = false

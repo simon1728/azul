@@ -377,7 +377,34 @@ if (command === "pack") {
   process.exit(0);
 }
 
-new SyncDaemon().start();
+const liveDaemon = new SyncDaemon();
+liveDaemon.start();
+
+let liveDaemonStopping = false;
+const stopLiveDaemon = async (signal: string): Promise<void> => {
+  if (liveDaemonStopping) {
+    return;
+  }
+
+  liveDaemonStopping = true;
+  log.info(`Received ${signal}, shutting down...`);
+
+  try {
+    await liveDaemon.stop();
+    process.exit(0);
+  } catch (error) {
+    log.error(`Failed to stop daemon cleanly: ${error}`);
+    process.exit(1);
+  }
+};
+
+process.on("SIGINT", () => {
+  void stopLiveDaemon("SIGINT");
+});
+
+process.on("SIGTERM", () => {
+  void stopLiveDaemon("SIGTERM");
+});
 
 function getFlagValue(flags: string[], argv: string[]): string | null {
   for (let i = 0; i < argv.length; i++) {
