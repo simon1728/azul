@@ -6,7 +6,7 @@ Azul allows you to use professional-grade tools like Visual Studio Code in Roblo
 
 _Yes, the name is a pun on Rojo (Spanish for "red"). Azul means "blue"!_
 
-<a href="#quick-start"><b>Quick Start</b></a> — <a href="#why-azul"><b>Why Azul</b></a> — <a href="https://github.com/Ransomwave/azul/wiki"><b>Documentation</b></a>
+<a href="#quick-start"><b>Quick Start</b></a> — <a href="#why-azul"><b>Why Azul</b></a> — <a href="https://azul-docs.vercel.app"><b>Documentation</b></a>
 
 ## Philosophy
 
@@ -19,9 +19,9 @@ Azul also allows pushing local files into Studio using the `azul build` command,
 ## Features
 
 - - [x] 🔄 **Bi-directional sync**: Changes in Studio update files, and file edits update Studio
-- - [x] 🏗️ **[Build command](https://github.com/Ransomwave/azul/wiki/Getting-started#building-from-an-existing-project)**: `azul build` one-time pushes your local files into Studio (creates or overwrites, never deletes)
-- - [x] 📦 **[Push command](https://github.com/Ransomwave/azul/wiki/Commands#azul-push)**: `azul push` selectively pushes local files. Useful when importing external libraries or using package managers (i.e Wally)
-- - [x] 🏛️ **Fully hermetic builds**: Use [`azul pack`](https://github.com/Ransomwave/azul/wiki/Commands#azul-pack) to fully serialize Instance properties, allowing for 1:1 reproductible builds when `build`ing or `push`ing.
+- - [x] 🏗️ **[Build command](https://azul-docs.vercel.app/getting-started/projects/#build-from-an-existing-local-project)**: `azul build` one-time pushes your local files into Studio (creates or overwrites, never deletes)
+- - [x] 📦 **[Push command](https://azul-docs.vercel.app/commands/#azul-push)**: `azul push` selectively pushes local files. Useful when importing external libraries or using package managers (i.e Wally)
+- - [x] 🏛️ **Fully hermetic builds**: Use [`azul pack`](https://azul-docs.vercel.app/commands/#azul-pack) to fully serialize Instance properties, allowing for 1:1 reproductible builds when `build`ing or `push`ing.
 - - [x] 🔴 **Rojo compatibility mode**: Supports importing from Rojo projects with the `--rojo` flag.
 - - [x] 🌳 **DataModel mirroring**: Instance hierarchy 1:1 mapped to folder structure
 - - [x] 🎯 **No manual config / required structure**: Works out of the box with new and existing Roblox Studio projects, regardless of structure.
