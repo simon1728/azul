@@ -605,6 +605,9 @@ function AzulService.readPushConfig(pushConfigPath: { string }): ({ [string]: an
 						destination = dest,
 						destructive = entry.destructive == true,
 						rojoMode = entry.rojoMode == true,
+						fromSourcemap = if type(entry.fromSourcemap) == "string" and entry.fromSourcemap ~= ""
+							then entry.fromSourcemap
+							else nil,
 					})
 				end
 			end

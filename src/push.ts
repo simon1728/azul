@@ -39,6 +39,10 @@ export class PushCommand {
   private options: PushOptions;
   private sourcemapPath: string;
   private sourcemapIndex: ReturnType<typeof loadSourcemapPropertyIndex>;
+  private sourcemapIndexByPath: Map<
+    string,
+    ReturnType<typeof loadSourcemapPropertyIndex>
+  >;
 
   constructor(options: PushOptions = {}) {
     this.options = options;
@@ -46,6 +50,9 @@ export class PushCommand {
       options.sourcemapPath ?? config.sourcemapPath,
     );
     this.sourcemapIndex = loadSourcemapPropertyIndex(this.sourcemapPath);
+    this.sourcemapIndexByPath = new Map([
+      [this.sourcemapPath, this.sourcemapIndex],
+    ]);
     this.ipc = new IPCServer(config.port, undefined, {
       requestSnapshotOnConnect: false,
     });
@@ -145,11 +152,18 @@ export class PushCommand {
         skipSymlinks: true,
       });
 
-      const instances = this.options.fromSourcemap
-        ? this.buildPushInstancesFromSourcemap(sourceDir, destSegments)
+      const mappingSourcemapPath = this.resolveMappingSourcemapPath(mapping);
+      const useFromSourcemap = Boolean(mappingSourcemapPath);
+
+      const instances = useFromSourcemap
+        ? this.buildPushInstancesFromSourcemap(
+            sourceDir,
+            destSegments,
+            mappingSourcemapPath!,
+          )
         : await builder.build();
 
-      if (this.options.fromSourcemap && !instances) {
+      if (useFromSourcemap && !instances) {
         log.warn(
           `Could not derive sourcemap subtree for ${sourceDir}; falling back to filesystem snapshot.`,
         );
@@ -169,14 +183,11 @@ export class PushCommand {
         continue;
       }
 
-      if (
-        !this.options.fromSourcemap &&
-        this.options.applySourcemap !== false
-      ) {
-        const applied = applySourcemapProperties(
-          instances,
-          this.sourcemapIndex,
+      if (!useFromSourcemap && this.options.applySourcemap !== false) {
+        const sourcemapIndex = this.getSourcemapIndexForPath(
+          this.sourcemapPath,
         );
+        const applied = applySourcemapProperties(instances, sourcemapIndex);
         if (applied > 0) {
           log.success(
             `Applied properties/attributes from sourcemap to ${applied} instance(s) for ${destSegments.join("/")}`,
@@ -450,6 +461,10 @@ export class PushCommand {
       destination: m.destination,
       destructive: Boolean(m.destructive),
       rojoMode: Boolean(m.rojoMode),
+      fromSourcemap:
+        typeof m.fromSourcemap === "string" && m.fromSourcemap.trim().length > 0
+          ? m.fromSourcemap
+          : undefined,
     }));
   }
 
@@ -463,8 +478,9 @@ export class PushCommand {
   private buildPushInstancesFromSourcemap(
     sourceDir: string,
     destSegments: string[],
+    sourcemapPath: string,
   ): InstanceData[] | null {
-    const all = buildInstancesFromSourcemap(this.sourcemapPath);
+    const all = buildInstancesFromSourcemap(sourcemapPath);
     if (!all || all.length === 0) {
       return null;
     }
@@ -487,6 +503,36 @@ export class PushCommand {
 
     rebased.sort((a, b) => a.path.length - b.path.length);
     return rebased;
+  }
+
+  private resolveMappingSourcemapPath(mapping: {
+    fromSourcemap?: string;
+  }): string | null {
+    if (this.options.fromSourcemap) {
+      return this.sourcemapPath;
+    }
+
+    if (
+      typeof mapping.fromSourcemap === "string" &&
+      mapping.fromSourcemap.trim().length > 0
+    ) {
+      return path.resolve(process.cwd(), mapping.fromSourcemap);
+    }
+
+    return null;
+  }
+
+  private getSourcemapIndexForPath(
+    sourcemapPath: string,
+  ): ReturnType<typeof loadSourcemapPropertyIndex> {
+    const existing = this.sourcemapIndexByPath.get(sourcemapPath);
+    if (existing) {
+      return existing;
+    }
+
+    const loaded = loadSourcemapPropertyIndex(sourcemapPath);
+    this.sourcemapIndexByPath.set(sourcemapPath, loaded);
+    return loaded;
   }
 
   private inferSourcePrefixFromPath(

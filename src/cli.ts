@@ -270,7 +270,12 @@ if (command === "push") {
     }
   }
 
-  if (!rojoFlag && !fromSourcemapFlag) {
+  const willUsePlaceConfig =
+    !rojoFlag &&
+    interactiveUsePlaceConfig &&
+    !(interactiveSource && interactiveDest);
+
+  if (!rojoFlag && !fromSourcemapFlag && !willUsePlaceConfig) {
     log.userInput(
       `Build push snapshot directly from ${config.sourcemapPath} (includes non-script descendants and ancestors)? (Y/N)`,
     );

@@ -162,4 +162,5 @@ export interface PushConfigMapping {
   destination: string[];
   destructive?: boolean;
   rojoMode?: boolean;
+  fromSourcemap?: string;
 }
