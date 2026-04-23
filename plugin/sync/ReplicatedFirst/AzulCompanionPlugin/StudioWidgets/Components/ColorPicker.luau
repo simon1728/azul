@@ -10,7 +10,7 @@ GuiUtilities = require("../GuiUtilities")
 local CustomTextButton = require("./CustomTextButton")
 local VerticallyScalingListFrame = require("./VerticallyScalingListFrame")
 
-local kColorPickedLabelHeight = 20
+local _kColorPickedLabelHeight = 20
 
 local ColorPickerClass = {}
 ColorPickerClass.__index = ColorPickerClass

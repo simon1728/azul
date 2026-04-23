@@ -20,10 +20,10 @@ module.kRadioButtonsHPadding = 24
 module.StandardLineLabelLeftMargin = module.kTitleBarHeight
 module.StandardLineElementLeftMargin = (
 	module.StandardLineLabelLeftMargin
-		+ module.kCheckboxMinLabelWidth
-		+ module.kCheckboxMinMargin
-		+ module.kCheckboxWidth
-		+ module.kRadioButtonsHPadding
+	+ module.kCheckboxMinLabelWidth
+	+ module.kCheckboxMinMargin
+	+ module.kCheckboxWidth
+	+ module.kRadioButtonsHPadding
 ) + 20
 module.StandardLineLabelWidth = (module.StandardLineElementLeftMargin - module.StandardLineLabelLeftMargin - 10)
 
@@ -338,7 +338,7 @@ end
 --- @param title string? -- Optional title text; if provided, a title bar will be added.
 --- @param contentHeight number? -- Optional fixed height for the content area of the section.
 --- @return Frame -- The constructed section frame.
-local function MakeSectionInternal(parentGui: GuiObject, name: string, title: string?, contentHeight: number?)
+local function _MakeSectionInternal(parentGui: GuiObject, name: string, title: string?, contentHeight: number?)
 	local frame = Instance.new("Frame")
 	frame.Name = name
 	frame.BackgroundTransparency = 1

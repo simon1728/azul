@@ -123,7 +123,9 @@ function LabeledCheckboxClass.new(nameSuffix: string, labelText: string, initVal
 end
 
 function LabeledCheckboxClass:_MaybeToggleState()
-	if not self._disabled then self:SetValue(not self._value) end
+	if not self._disabled then
+		self:SetValue(not self._value)
+	end
 end
 
 function LabeledCheckboxClass:_SetupMouseClickHandling()
@@ -139,11 +141,15 @@ end
 function LabeledCheckboxClass:_HandleUpdatedValue()
 	--self._checkImage.Visible = self:GetValue()
 
-	if not self._checkImage.Visible then self._checkImage.Visible = true end
+	if not self._checkImage.Visible then
+		self._checkImage.Visible = true
+	end
 
 	self:_UpdateAppearance()
 
-	if self._valueChangedFunction then self._valueChangedFunction(self:GetValue()) end
+	if self._valueChangedFunction then
+		self._valueChangedFunction(self:GetValue())
+	end
 end
 
 function LabeledCheckboxClass:_UpdateFontColors()
@@ -240,7 +246,9 @@ function LabeledCheckboxClass:SetDisabled(newDisabled: boolean)
 
 		-- if we are no longer disabled, then we don't need or want
 		-- the override any more.  Forget it.
-		if not self._disabled then self._useDisabledOverride = false end
+		if not self._disabled then
+			self._useDisabledOverride = false
+		end
 
 		if newDisabled then
 			self._checkImage.Image = kDisabledCheckImage
@@ -254,11 +262,15 @@ function LabeledCheckboxClass:SetDisabled(newDisabled: boolean)
 			or GuiUtilities.kButtonStandardBackgroundColor
 		self._button.BorderColor3 = self._disabled and GuiUtilities.kButtonDisabledBorderColor
 			or GuiUtilities.kButtonStandardBorderColor
-		if self._disabledChangedFunction then self._disabledChangedFunction(self._disabled) end
+		if self._disabledChangedFunction then
+			self._disabledChangedFunction(self._disabled)
+		end
 	end
 
 	local newValue = self:GetValue()
-	if newValue ~= originalValue then self:_HandleUpdatedValue() end
+	if newValue ~= originalValue then
+		self:_HandleUpdatedValue()
+	end
 end
 
 --- Returns whether the checkbox is currently disabled.
@@ -278,7 +290,9 @@ function LabeledCheckboxClass:DisableWithOverrideValue(overrideValue: boolean)
 	self._disabledOverride = overrideValue
 	self:SetDisabled(true)
 	local newValue = self:GetValue()
-	if oldValue ~= newValue then self:_HandleUpdatedValue() end
+	if oldValue ~= newValue then
+		self:_HandleUpdatedValue()
+	end
 end
 
 --- Sets the value of the checkbox manually.

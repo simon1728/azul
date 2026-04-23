@@ -11,12 +11,18 @@ local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
 
 -- Prevent from running if the game is being Playtested
-if RunService:IsRunning() then return end
+if RunService:IsRunning() then
+	return
+end
 
 local pluginParent = script.Parent
-if not pluginParent then return end
+if not pluginParent then
+	return
+end
 local azulPluginFolder = pluginParent.Parent
-if not azulPluginFolder then return end
+if not azulPluginFolder then
+	return
+end
 
 -- Modules
 local WebSocketClient = require("../WebSocketClient")
@@ -38,18 +44,24 @@ local SETTINGS_SCOPE_KEY = "AZUL_SETTINGS_SCOPE_BY_PLACE"
 
 -- Logging helpers
 local function debugPrint(...)
-	if CONFIG.SILENT_MODE or not CONFIG.DEBUG_MODE then return end
+	if CONFIG.SILENT_MODE or not CONFIG.DEBUG_MODE then
+		return
+	end
 	print(`[🐛 Azul]:`, ...)
 end
 
 local function infoPrint(...)
-	if CONFIG.SILENT_MODE then return end
+	if CONFIG.SILENT_MODE then
+		return
+	end
 	print(`[Azul]:	`, ...)
 end
 
 local function getScopeKey(scope)
 	local placeId = tostring(game.PlaceId or "0")
-	if scope == Enums.scope.PROJECT then return `project_{placeId}` end
+	if scope == Enums.scope.PROJECT then
+		return `project_{placeId}`
+	end
 	return "global"
 end
 
@@ -59,7 +71,9 @@ end
 
 local function saveSelectedScope()
 	local selectedScopes = plugin:GetSetting(SETTINGS_SCOPE_KEY)
-	if type(selectedScopes) ~= "table" then selectedScopes = {} end
+	if type(selectedScopes) ~= "table" then
+		selectedScopes = {}
+	end
 
 	selectedScopes[getPlaceScopeSelectionKey()] = SETTINGS_SCOPE
 	plugin:SetSetting(SETTINGS_SCOPE_KEY, selectedScopes)
@@ -67,10 +81,14 @@ end
 
 local function loadSelectedScope()
 	local selectedScopes = plugin:GetSetting(SETTINGS_SCOPE_KEY)
-	if type(selectedScopes) ~= "table" then return end
+	if type(selectedScopes) ~= "table" then
+		return
+	end
 
 	local scope = selectedScopes[getPlaceScopeSelectionKey()]
-	if scope == Enums.scope.GLOBAL or scope == Enums.scope.PROJECT then SETTINGS_SCOPE = scope end
+	if scope == Enums.scope.GLOBAL or scope == Enums.scope.PROJECT then
+		SETTINGS_SCOPE = scope
+	end
 end
 
 local _storedSettings = {}
@@ -78,7 +96,9 @@ local _storedSettings = {}
 -- Save settings
 local function saveSettings()
 	local all = plugin:GetSetting(SETTINGS_KEY)
-	if type(all) ~= "table" then all = {} end
+	if type(all) ~= "table" then
+		all = {}
+	end
 
 	local scopeKey = getScopeKey(SETTINGS_SCOPE)
 	local scopedCopy = {}
@@ -88,7 +108,9 @@ local function saveSettings()
 
 	-- Always persist debug/silent at the global level
 	local globalScoped = all["global"]
-	if type(globalScoped) ~= "table" then globalScoped = {} end
+	if type(globalScoped) ~= "table" then
+		globalScoped = {}
+	end
 	globalScoped.DEBUG_MODE = CONFIG.DEBUG_MODE
 	globalScoped.SILENT_MODE = CONFIG.SILENT_MODE
 	all["global"] = globalScoped
@@ -105,7 +127,9 @@ local function loadSettings()
 		-- Legacy flat settings fallback
 		for key, _ in pairs(CONFIG) do
 			local legacyValue = plugin:GetSetting(key)
-			if legacyValue ~= nil then CONFIG[key] = legacyValue end
+			if legacyValue ~= nil then
+				CONFIG[key] = legacyValue
+			end
 		end
 		_storedSettings = all
 		return
@@ -116,23 +140,37 @@ local function loadSettings()
 	local scoped = all[scopeKey]
 	local globalScoped = all["global"]
 
-	if type(scoped) ~= "table" then scoped = {} end
-	if type(globalScoped) ~= "table" then globalScoped = {} end
+	if type(scoped) ~= "table" then
+		scoped = {}
+	end
+	if type(globalScoped) ~= "table" then
+		globalScoped = {}
+	end
 
 	for key, _ in pairs(CONFIG) do
 		local value = scoped[key]
-		if value == nil and scopeKey ~= "global" then value = globalScoped[key] end
-		if value ~= nil then CONFIG[key] = value end
+		if value == nil and scopeKey ~= "global" then
+			value = globalScoped[key]
+		end
+		if value ~= nil then
+			CONFIG[key] = value
+		end
 	end
 
 	-- DEBUG_MODE and SILENT_MODE always come from global
-	if globalScoped.DEBUG_MODE ~= nil then CONFIG.DEBUG_MODE = globalScoped.DEBUG_MODE end
-	if globalScoped.SILENT_MODE ~= nil then CONFIG.SILENT_MODE = globalScoped.SILENT_MODE end
+	if globalScoped.DEBUG_MODE ~= nil then
+		CONFIG.DEBUG_MODE = globalScoped.DEBUG_MODE
+	end
+	if globalScoped.SILENT_MODE ~= nil then
+		CONFIG.SILENT_MODE = globalScoped.SILENT_MODE
+	end
 end
 
 --- Utility: Safely get a positive number from config, with fallback
 local function safeGetNumber(value, default)
-	if type(value) == "number" and value > 0 then return value end
+	if type(value) == "number" and value > 0 then
+		return value
+	end
 	return default
 end
 
@@ -177,14 +215,18 @@ AzulService.rebuildServiceSet(serviceSet)
 
 -- Utility: Check if instance should be included in snapshot (all instances)
 local function shouldIncludeInSnapshot(instance)
-	if not instance then return false end
+	if not instance then
+		return false
+	end
 
 	return not AzulService.isExcluded(instance, serviceSet)
 end
 
 -- Send message to daemon
 local function sendMessage(messageTypeOrPayload, data: any?)
-	if not wsClient or not wsClient.connected then return false end
+	if not wsClient or not wsClient.connected then
+		return false
+	end
 
 	local message
 	if type(messageTypeOrPayload) == "table" then
@@ -233,7 +275,9 @@ local function sendFullSnapshot(options: { includeProperties: boolean, scriptsAn
 			if isScript(descendant) and shouldIncludeInSnapshot(descendant) then
 				local current: Instance? = descendant
 				while current and current ~= game do
-					if shouldIncludeInSnapshot(current) then includeAncestorsOfScripts[current] = true end
+					if shouldIncludeInSnapshot(current) then
+						includeAncestorsOfScripts[current] = true
+					end
 					current = current.Parent
 				end
 			end
@@ -303,7 +347,9 @@ local function sendFullSnapshot(options: { includeProperties: boolean, scriptsAn
 		end
 
 		-- Yield periodically to avoid hitting Studio's execution time limit
-		if index % batchSize == 0 then task.wait() end
+		if index % batchSize == 0 then
+			task.wait()
+		end
 
 		index += 1
 	end
@@ -357,18 +403,22 @@ local function flushOutboundQueues()
 	end
 
 	for guid, shouldSend in pairs(pendingDeletes) do
-		if shouldSend then table.insert(messages, {
-			type = "deleted",
-			data = {
-				guid = guid,
-			},
-		}) end
+		if shouldSend then
+			table.insert(messages, {
+				type = "deleted",
+				data = {
+					guid = guid,
+				},
+			})
+		end
 	end
 
 	table.clear(pendingInstanceUpdates)
 	table.clear(pendingDeletes)
 
-	if #messages == 0 then return end
+	if #messages == 0 then
+		return
+	end
 
 	if batchingEnabled and #messages > 1 then
 		if #messages > 200 then
@@ -386,28 +436,40 @@ end
 
 -- Schedule a batch flush after a quiet window
 local function scheduleBatchFlush()
-	if not batchingEnabled then return end
+	if not batchingEnabled then
+		return
+	end
 
 	batchFlushToken += 1
 	local token = batchFlushToken
 
 	task.delay(safeGetNumber(CONFIG.BATCH_IDLE_WINDOW, 0.1), function()
-		if token ~= batchFlushToken then return end
+		if token ~= batchFlushToken then
+			return
+		end
 		flushOutboundQueues()
 	end)
 end
 
 local function queueInstanceUpdate(data)
-	if suppressOutbound or not syncEnabled then return end
-	if not data or not data.guid then return end
+	if suppressOutbound or not syncEnabled then
+		return
+	end
+	if not data or not data.guid then
+		return
+	end
 
 	pendingInstanceUpdates[data.guid] = data
 	scheduleBatchFlush()
 end
 
 local function queueScriptChange(payload)
-	if suppressOutbound or not syncEnabled then return end
-	if not payload or not payload.guid then return end
+	if suppressOutbound or not syncEnabled then
+		return
+	end
+	if not payload or not payload.guid then
+		return
+	end
 
 	pendingScriptChangeReady[payload.guid] = false
 	pendingScriptChanges[payload.guid] = payload
@@ -416,9 +478,15 @@ local function queueScriptChange(payload)
 	scriptChangeDebounceTokenByGuid[payload.guid] = token
 
 	task.delay(safeGetNumber(CONFIG.SCRIPT_CHANGE_DEBOUNCE, 0.35), function()
-		if not syncEnabled or suppressOutbound then return end
-		if scriptChangeDebounceTokenByGuid[payload.guid] ~= token then return end
-		if not pendingScriptChanges[payload.guid] then return end
+		if not syncEnabled or suppressOutbound then
+			return
+		end
+		if scriptChangeDebounceTokenByGuid[payload.guid] ~= token then
+			return
+		end
+		if not pendingScriptChanges[payload.guid] then
+			return
+		end
 
 		pendingScriptChangeReady[payload.guid] = true
 		scheduleBatchFlush()
@@ -426,8 +494,12 @@ local function queueScriptChange(payload)
 end
 
 local function queueDeletion(guid: string)
-	if suppressOutbound or not syncEnabled then return end
-	if not guid or guid == "" then return end
+	if suppressOutbound or not syncEnabled then
+		return
+	end
+	if not guid or guid == "" then
+		return
+	end
 
 	pendingDeletes[guid] = true
 	scheduleBatchFlush()
@@ -435,10 +507,14 @@ end
 
 -- Deduped instance update sender (used for adds, renames, reparent)
 local function sendInstanceUpdateDedup(instance)
-	if suppressOutbound or not syncEnabled then return end
+	if suppressOutbound or not syncEnabled then
+		return
+	end
 
 	local data = AzulService.instanceToDataDedup(instance, trackedInstances, guidMap, usedGuids, lastInstanceUpdate)
-	if not data then return end
+	if not data then
+		return
+	end
 
 	local guid = data.guid
 	trackedInstances[instance] = guid
@@ -449,17 +525,23 @@ end
 
 -- Utility: Check if instance should be synced (scripts only)
 local function shouldSync(instance)
-	if not instance then return false end
+	if not instance then
+		return false
+	end
 
 	-- Only sync scripts
-	if not isScript(instance) then return false end
+	if not isScript(instance) then
+		return false
+	end
 
 	return not AzulService.isExcluded(instance, serviceSet)
 end
 
 -- Handle script change
 local function onScriptChanged(changedScript: Script | LocalScript | ModuleScript)
-	if suppressOutbound or not shouldSync(changedScript) then return end
+	if suppressOutbound or not shouldSync(changedScript) then
+		return
+	end
 
 	local guid = AzulService.getOrCreateGUID(changedScript, trackedInstances, guidMap, usedGuids)
 
@@ -471,7 +553,9 @@ local function onScriptChanged(changedScript: Script | LocalScript | ModuleScrip
 	end
 
 	-- Don't send changes if we're applying a patch from daemon
-	if applyingPatch then return end
+	if applyingPatch then
+		return
+	end
 
 	-- Don't send changes within 1 second of receiving a patch (debounce)
 	local lastPatch = lastPatchTime[guid] or 0
@@ -482,7 +566,9 @@ local function onScriptChanged(changedScript: Script | LocalScript | ModuleScrip
 	end
 
 	local path = AzulService.getInstancePath(changedScript)
-	if not path then return end
+	if not path then
+		return
+	end
 
 	queueScriptChange({
 		guid = guid,
@@ -494,7 +580,9 @@ end
 
 -- Utility: register change listeners on an instance for name/parent/source updates
 local function attachListeners(instance)
-	if not shouldIncludeInSnapshot(instance) then return end
+	if not shouldIncludeInSnapshot(instance) then
+		return
+	end
 
 	-- Name changes should propagate to daemon (renames / path changes)
 	local nameConnnection = instance:GetPropertyChangedSignal("Name"):Connect(function()
@@ -506,7 +594,9 @@ local function attachListeners(instance)
 	-- Parent changes (reparent/move) also change path
 	local parentConnection = instance:GetPropertyChangedSignal("Parent"):Connect(function()
 		-- If parent is nil (destroy in progress), rely on DescendantRemoving -> deleted
-		if instance.Parent == nil then return end
+		if instance.Parent == nil then
+			return
+		end
 		sendInstanceUpdateDedup(instance)
 	end)
 
@@ -515,7 +605,9 @@ local function attachListeners(instance)
 	-- Source changes (scripts only)
 	if isScript(instance) then
 		local sourceConnection = (instance :: Script):GetPropertyChangedSignal("Source"):Connect(function()
-			if syncEnabled then onScriptChanged(instance :: Script) end
+			if syncEnabled then
+				onScriptChanged(instance :: Script)
+			end
 		end)
 		table.insert(connections, sourceConnection)
 	end
@@ -523,11 +615,15 @@ end
 
 local function wipeChildren(container: Instance)
 	for _, child in ipairs(container:GetChildren()) do
-		if AzulService.isProtectedRobloxContainer(child) then continue end
+		if AzulService.isProtectedRobloxContainer(child) then
+			continue
+		end
 		local ok, err = pcall(function()
 			child:Destroy()
 		end)
-		if not ok then warn(`[Azul]: Cannot destroy '{child.Name}': {err}`) end
+		if not ok then
+			warn(`[Azul]: Cannot destroy '{child.Name}': {err}`)
+		end
 	end
 end
 
@@ -539,7 +635,9 @@ local function wipeBuildRoots(instances: { any })
 		local path = item.path
 		if type(path) == "table" and #path >= 1 then
 			local rootName = path[1]
-			if type(rootName) == "string" and rootName ~= "" then rootsSeen[rootName] = true end
+			if type(rootName) == "string" and rootName ~= "" then
+				rootsSeen[rootName] = true
+			end
 		end
 	end
 
@@ -559,7 +657,9 @@ local function wipeBuildRoots(instances: { any })
 			local ok, err = pcall(function()
 				wipeChildren(rootInstance)
 			end)
-			if not ok then warn(`[Azul]: Failed to wipe children for root container '{rootName}': {err}`) end
+			if not ok then
+				warn(`[Azul]: Failed to wipe children for root container '{rootName}': {err}`)
+			end
 		else
 			warn(`[Azul]: Destructive build could not find root container '{rootName}', skipping wipe`)
 		end
@@ -586,12 +686,18 @@ end
 
 -- Handle instance added
 local function onInstanceAdded(instance: Instance)
-	if suppressOutbound then return end
+	if suppressOutbound then
+		return
+	end
 	-- Include all non-excluded instances (scripts + containers) so sourcemap stays accurate
-	if not shouldIncludeInSnapshot(instance) then return end
+	if not shouldIncludeInSnapshot(instance) then
+		return
+	end
 
 	local data = AzulService.instanceToData(instance, trackedInstances, guidMap, usedGuids)
-	if not data then return end
+	if not data then
+		return
+	end
 	-- local guid = data.guid
 	sendInstanceUpdateDedup(instance)
 
@@ -604,7 +710,9 @@ end
 
 -- Handle instance removed
 local function onInstanceRemoved(instance)
-	if suppressOutbound then return end
+	if suppressOutbound then
+		return
+	end
 
 	if not trackedInstances[instance] then
 		-- debugPrint(`Instance is excluded: {instance.Parent}.{instance.Name}`)
@@ -614,9 +722,13 @@ local function onInstanceRemoved(instance)
 	local guid = trackedInstances[instance]
 
 	-- Fallback: if we never tracked this instance (edge cases), use debug id directly
-	if not guid then guid = instance:GetDebugId(0) end
+	if not guid then
+		guid = instance:GetDebugId(0)
+	end
 
-	if not guid then return end
+	if not guid then
+		return
+	end
 
 	trackedInstances[instance] = nil
 	guidMap[guid] = nil
@@ -676,7 +788,9 @@ local function processMessage(message)
 		setOutboundSuppressed(true)
 
 		local ok, err = pcall(function()
-			if message.destructive == true then wipeBuildRoots(message.data or {}) end
+			if message.destructive == true then
+				wipeBuildRoots(message.data or {})
+			end
 
 			local created, updated, appliedGuidMap = AzulService.applySnapshotInstances(message.data)
 			-- Update tracking with new instances
@@ -689,7 +803,9 @@ local function processMessage(message)
 		end)
 
 		setOutboundSuppressed(false)
-		if not ok then warn("[Azul]: Error applying build snapshot", err) end
+		if not ok then
+			warn("[Azul]: Error applying build snapshot", err)
+		end
 
 		-- Disconnect after build completes (daemon will exit)
 		task.delay(0.5, function()
@@ -708,7 +824,9 @@ local function processMessage(message)
 				end
 
 				local targetContainer = AzulService.getOrCreatePath(destination)
-				if mapping.destructive then wipeChildren(targetContainer) end
+				if mapping.destructive then
+					wipeChildren(targetContainer)
+				end
 
 				local created, updated, appliedGuidMap = AzulService.applySnapshotInstances(mapping.instances or {})
 				-- Update tracking with new instances
@@ -722,7 +840,9 @@ local function processMessage(message)
 		end)
 
 		setOutboundSuppressed(false)
-		if not ok then warn("[Azul]: Error applying push snapshot", err) end
+		if not ok then
+			warn("[Azul]: Error applying push snapshot", err)
+		end
 
 		-- Disconnect after push completes (daemon will exit)
 		task.delay(0.5, function()
@@ -748,14 +868,18 @@ local azulUI
 
 -- Start sync
 local function startSync()
-	if syncEnabled then return end
+	if syncEnabled then
+		return
+	end
 
 	infoPrint("Starting sync...")
 	syncEnabled = true
 	batchingEnabled = false
 	batchFlushToken += 1
 
-	if azulUI then azulUI:UpdateSyncState(true) end
+	if azulUI then
+		azulUI:UpdateSyncState(true)
+	end
 
 	-- Create and connect WebSocket client
 	wsClient = WebSocketClient.new(CONFIG.WS_URL, {
@@ -819,13 +943,17 @@ local function startSync()
 
 	-- Listen for new instances
 	local descendantAddedConnection = game.DescendantAdded:Connect(function(instance)
-		if syncEnabled then onInstanceAdded(instance) end
+		if syncEnabled then
+			onInstanceAdded(instance)
+		end
 	end)
 	table.insert(connections, descendantAddedConnection)
 
 	-- Listen for removed instances
 	local descendantRemovingConnection = game.DescendantRemoving:Connect(function(instance)
-		if syncEnabled then onInstanceRemoved(instance) end
+		if syncEnabled then
+			onInstanceRemoved(instance)
+		end
 	end)
 	table.insert(connections, descendantRemovingConnection)
 
@@ -862,17 +990,25 @@ end
 
 -- Stop sync
 function stopSync(dontRelayDisconnect: boolean?)
-	if not syncEnabled then return end
+	if not syncEnabled then
+		return
+	end
 
-	if not dontRelayDisconnect then sendMessage("clientDisconnect", {}) end
+	if not dontRelayDisconnect then
+		sendMessage("clientDisconnect", {})
+	end
 
 	infoPrint("Stopping sync...")
 	syncEnabled = false
 
-	if azulUI then azulUI:UpdateSyncState(false) end
+	if azulUI then
+		azulUI:UpdateSyncState(false)
+	end
 
 	-- Close WebSocket connection
-	if wsClient then wsClient:disconnect() end
+	if wsClient then
+		wsClient:disconnect()
+	end
 	wsClient = nil :: any
 
 	-- Clear GUID attributes if configured
@@ -921,7 +1057,9 @@ local uiCallbacks: UI.CallbackFunctions = {
 	end,
 	onSettingsScopeChanged = function(newScope)
 		local newScopeIsGlobal = newScope == Enums.scope.GLOBAL
-		if newScopeIsGlobal == (SETTINGS_SCOPE == Enums.scope.GLOBAL) then return end
+		if newScopeIsGlobal == (SETTINGS_SCOPE == Enums.scope.GLOBAL) then
+			return
+		end
 
 		-- Persist the current scope before switching
 		saveSettings()
